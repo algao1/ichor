@@ -30,19 +30,26 @@ func Create() (*TimeSeriesStore, error) {
 	return &TimeSeriesStore{db}, nil
 }
 
+// Initialize stands up the necessary buckets for future transactions.
+//		TODO: Initialize from a manifest file.
 func (tss *TimeSeriesStore) Initialize() error {
 	return tss.DB.Update(func(tx *bolt.Tx) error {
 		_, err := tx.CreateBucketIfNotExists([]byte("glucose"))
 		if err != nil {
-			return fmt.Errorf("unable to create bucket: %s", err)
+			return fmt.Errorf("unable to create bucket: %w", err)
 		}
 		return nil
 	})
 }
 
+// AddPoint adds a singular TimePoint under a field.
+// Returns an error if the field does not exist.
 func (tss *TimeSeriesStore) AddPoint(field string, tp TimePoint) error {
 	return tss.DB.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(field))
+		if b == nil {
+			return fmt.Errorf("unable to find bucket: %s", field)
+		}
 
 		var vbuf [8]byte
 		binary.BigEndian.PutUint64(vbuf[:], math.Float64bits(tp.Value))
@@ -51,6 +58,8 @@ func (tss *TimeSeriesStore) AddPoint(field string, tp TimePoint) error {
 	})
 }
 
+// GetPoints retrieves a series of TimePoints for a given field,
+// between two dates. Returns an error if the field does not exist.
 func (tss *TimeSeriesStore) GetPoints(start, end time.Time, field string) ([]TimePoint, error) {
 	tps := make([]TimePoint, 0)
 	min := timeToBytes(start)
@@ -58,6 +67,10 @@ func (tss *TimeSeriesStore) GetPoints(start, end time.Time, field string) ([]Tim
 
 	err := tss.DB.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(field))
+		if b == nil {
+			return fmt.Errorf("unable to find bucket: %s", field)
+		}
+
 		c := b.Cursor()
 
 		for k, v := c.Seek(min); k != nil && bytes.Compare(k, max) <= 0; k, v = c.Next() {
