@@ -72,9 +72,32 @@ func (s *Store) GetPoints(start, end time.Time, field string) ([]TimePoint, erro
 		}
 
 		c := b.Cursor()
-
 		for k, v := c.Seek(min); k != nil && bytes.Compare(k, max) <= 0; k, v = c.Next() {
 			tps = append(tps, TimePoint{bytesToTime(k), bytesToFloat64(v)})
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return tps, nil
+}
+
+func (s *Store) GetLastPoints(field string, last int) ([]TimePoint, error) {
+	tps := make([]TimePoint, 0)
+
+	err := s.DB.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(field))
+		if b == nil {
+			return fmt.Errorf("unable to find bucket: %s", field)
+		}
+
+		c := b.Cursor()
+		for k, v := c.Last(); k != nil && last > 0; k, v = c.Prev() {
+			tps = append(tps, TimePoint{bytesToTime(k), bytesToFloat64(v)})
+			last--
 		}
 
 		return nil
