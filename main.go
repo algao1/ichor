@@ -6,13 +6,13 @@ import (
 )
 
 func main() {
-	tss, err := store.Create()
+	s, err := store.Create()
 	if err != nil {
 		panic(err)
 	}
 
-	tss.Initialize()
+	s.Initialize()
 
-	r := router.Create(tss)
+	r := router.Create(s)
 	r.Run(":8080")
 }

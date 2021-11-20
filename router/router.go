@@ -15,15 +15,15 @@ type Router struct {
 	*gin.Engine
 }
 
-func Create(tss *store.TimeSeriesStore) *Router {
+func Create(s *store.Store) *Router {
 	r := gin.Default()
 
-	r.POST("/upload/glucose", uploadGlucose(tss))
+	r.POST("/upload/glucose", uploadGlucose(s))
 
 	return &Router{r}
 }
 
-func uploadGlucose(tss *store.TimeSeriesStore) func(*gin.Context) {
+func uploadGlucose(s *store.Store) func(*gin.Context) {
 	return func(c *gin.Context) {
 		var hd HealthData
 
@@ -43,7 +43,7 @@ func uploadGlucose(tss *store.TimeSeriesStore) func(*gin.Context) {
 					log.Fatal(err)
 				}
 
-				tss.AddPoint("glucose", store.TimePoint{Time: date, Value: val})
+				s.AddPoint("glucose", store.TimePoint{Time: date, Value: val})
 			}
 
 			c.JSON(http.StatusOK, gin.H{"status": "ok"})

@@ -13,7 +13,7 @@ import (
 // See https://itnext.io/storing-time-series-in-rocksdb-a-cookbook-e873fcb117e4
 // for inspiration.
 
-type TimeSeriesStore struct {
+type Store struct {
 	DB *bolt.DB
 }
 
@@ -22,18 +22,18 @@ type TimePoint struct {
 	Value float64
 }
 
-func Create() (*TimeSeriesStore, error) {
+func Create() (*Store, error) {
 	db, err := bolt.Open("ichor.db", 0600, nil)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create store: %w", err)
 	}
-	return &TimeSeriesStore{db}, nil
+	return &Store{db}, nil
 }
 
 // Initialize stands up the necessary buckets for future transactions.
 //		TODO: Initialize from a manifest file.
-func (tss *TimeSeriesStore) Initialize() error {
-	return tss.DB.Update(func(tx *bolt.Tx) error {
+func (s *Store) Initialize() error {
+	return s.DB.Update(func(tx *bolt.Tx) error {
 		_, err := tx.CreateBucketIfNotExists([]byte("glucose"))
 		if err != nil {
 			return fmt.Errorf("unable to create bucket: %w", err)
@@ -44,8 +44,8 @@ func (tss *TimeSeriesStore) Initialize() error {
 
 // AddPoint adds a singular TimePoint under a field.
 // Returns an error if the field does not exist.
-func (tss *TimeSeriesStore) AddPoint(field string, tp TimePoint) error {
-	return tss.DB.Update(func(tx *bolt.Tx) error {
+func (s *Store) AddPoint(field string, tp TimePoint) error {
+	return s.DB.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(field))
 		if b == nil {
 			return fmt.Errorf("unable to find bucket: %s", field)
@@ -60,12 +60,12 @@ func (tss *TimeSeriesStore) AddPoint(field string, tp TimePoint) error {
 
 // GetPoints retrieves a series of TimePoints for a given field,
 // between two dates. Returns an error if the field does not exist.
-func (tss *TimeSeriesStore) GetPoints(start, end time.Time, field string) ([]TimePoint, error) {
+func (s *Store) GetPoints(start, end time.Time, field string) ([]TimePoint, error) {
 	tps := make([]TimePoint, 0)
 	min := timeToBytes(start)
 	max := timeToBytes(end)
 
-	err := tss.DB.View(func(tx *bolt.Tx) error {
+	err := s.DB.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(field))
 		if b == nil {
 			return fmt.Errorf("unable to find bucket: %s", field)
