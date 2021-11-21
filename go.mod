@@ -30,6 +30,7 @@ require (
 	golang.org/x/image v0.0.0-20210628002857-a66eb6448b8d // indirect
 	golang.org/x/sys v0.0.0-20210304124612-50617c2ba197 // indirect
 	golang.org/x/text v0.3.6 // indirect
+	gonum.org/v1/gonum v0.9.3 // indirect
 	gonum.org/v1/plot v0.10.0 // indirect
 	gopkg.in/yaml.v2 v2.2.8 // indirect
 )
