@@ -56,18 +56,18 @@ func cmdGetGlucoseData(dg *discordgo.Session, m *discordgo.MessageCreate, s *sto
 
 	timeUnit *= time.Duration(n)
 
-	tps, err := s.GetPoints(time.Now().Add(-timeUnit), time.Now(), "glucose")
+	pts, err := s.GetPoints(time.Now().Add(-timeUnit), time.Now(), "glucose")
 	if err != nil {
 		msg = fmt.Sprintf("unable to get points: %s", err)
 		_, err := dg.ChannelMessageSend(m.ChannelID, inlineStr(msg))
 		return err
 	}
 
-	x := make([]float64, len(tps))
+	x := make([]float64, len(pts))
 
-	for i, tp := range tps {
-		msg += fmt.Sprintf("%s %5.2f\n", tp.Time.In(loc).Format("2006-01-02 03:04 PM"), tp.Value)
-		x[i] = tp.Value
+	for i, pt := range pts {
+		msg += fmt.Sprintf("%s %5.2f\n", pt.Time.In(loc).Format("2006-01-02 03:04 PM"), pt.Value)
+		x[i] = pt.Value
 	}
 
 	mean := stat.Mean(x, nil)
