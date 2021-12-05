@@ -23,7 +23,7 @@ type TimePoint struct {
 }
 
 func Create() (*Store, error) {
-	db, err := bolt.Open("ichor.db", 0600, nil)
+	db, err := bolt.Open("data/ichor.db", 0600, nil)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create store: %w", err)
 	}
