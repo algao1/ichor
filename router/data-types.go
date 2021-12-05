@@ -1,10 +1,10 @@
 package router
 
 type HealthData struct {
-	Glucose GlucoseData `json:"glucose" binding:"required"`
+	Data DataBlock `json:"data" binding:"required"`
 }
 
-type GlucoseData struct {
+type DataBlock struct {
 	Values string `json:"values"`
 	Dates  string `json:"dates"`
 }

@@ -29,8 +29,8 @@ func uploadGlucose(s *store.Store) func(*gin.Context) {
 
 		if c.Bind(&hd) == nil {
 			// Apple Health weirdness with getting health samples.
-			glucoseValues := strings.Split(hd.Glucose.Values, "\n")
-			dateStrs := strings.Split(hd.Glucose.Dates, "\n")
+			glucoseValues := strings.Split(hd.Data.Values, "\n")
+			dateStrs := strings.Split(hd.Data.Dates, "\n")
 
 			for i := range glucoseValues {
 				date, err := time.Parse("2006-01-02T15:04:05-07:00", dateStrs[i])
