@@ -14,8 +14,9 @@ RUN go build
 FROM golang:1.16-alpine AS service
 WORKDIR /go/src/ichor
 COPY --from=service_builder /go/src/ichor .
+RUN mkdir -p data
 
 EXPOSE 8080
 ENV DISCORD_TOKEN ""
 
-CMD ./ichor -t ${DISCORD_TOKEN}
+CMD ./ichor -t ${DISCORD_TOKEN} -a ${DEXCOM_ACCOUNT} -p ${DEXCOM_PASSWORD}

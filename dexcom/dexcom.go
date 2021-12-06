@@ -142,7 +142,7 @@ func Transform(r *Reading, loc *time.Location) (*TransformedReading, error) {
 	}
 
 	return &TransformedReading{
-		Time:  time.Unix(int64(unix/100), 0).In(loc),
+		Time:  time.Unix(int64(unix/1000), 0).In(loc),
 		Mmol:  r.Value / 18,
 		Trend: trend,
 	}, nil

@@ -7,17 +7,22 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/algao1/ichor/dexcom"
 	"github.com/algao1/ichor/discord"
-	"github.com/algao1/ichor/router"
 	"github.com/algao1/ichor/store"
 )
 
 var (
-	token string
+	token       string
+	dexAccount  string
+	dexPassword string
 )
 
 func init() {
 	flag.StringVar(&token, "t", "", "bot token")
+	flag.StringVar(&dexAccount, "a", "", "dexcom account")
+	flag.StringVar(&dexPassword, "p", "", "dexcom password")
+
 	flag.Parse()
 }
 
@@ -26,11 +31,10 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-
 	s.Initialize()
 
-	r := router.Create(s)
-	go r.Run(":8080")
+	dc := dexcom.New(dexAccount, dexPassword)
+	go dexcom.RunUploader(dc, s)
 
 	db, err := discord.Create(token, s)
 	if err != nil {
