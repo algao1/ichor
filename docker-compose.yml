@@ -5,20 +5,25 @@ services:
     build:
       context: .
       dockerfile: ./docker/py/Py.Dockerfile
+    container_name: server
     ports:
-      - "50051:50051"
+      - "50051:50051" 
   
   client:
     build:
       context: .
       dockerfile: ./docker/go/Go.Dockerfile
+    container_name: client
     environment:
       - DISCORD_TOKEN=${DISCORD_TOKEN}
       - DEXCOM_ACCOUNT=${DEXCOM_ACCOUNT}
       - DEXCOM_PASSWORD=${DEXCOM_PASSWORD}
+      - SERVER_ADDR=server:50051
     volumes:
       - type: bind
         source: ./data
         target: /go/src/ichor/data
     ports:
       - "8080:8080"
+    depends_on: 
+      - server

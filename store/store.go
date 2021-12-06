@@ -34,6 +34,12 @@ func (s *Store) Initialize() error {
 		if err != nil {
 			return fmt.Errorf("unable to create bucket: %w", err)
 		}
+
+		_, err = tx.CreateBucketIfNotExists([]byte("glucose-pred"))
+		if err != nil {
+			return fmt.Errorf("unable to create bucket: %w", err)
+		}
+
 		return nil
 	})
 }

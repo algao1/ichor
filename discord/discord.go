@@ -49,6 +49,8 @@ func makeMessageCreate(s *store.Store) func(*discordgo.Session, *discordgo.Messa
 		switch cmd {
 		case "!glucose":
 			cmdGetGlucoseData(dg, m, s, parsed[1:])
+		case "!predict":
+			cmdGetPredictions(dg, m, s, parsed[1:])
 		default:
 		}
 	}
