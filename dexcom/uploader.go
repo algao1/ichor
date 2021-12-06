@@ -1,7 +1,6 @@
 package dexcom
 
 import (
-	"fmt"
 	"log"
 	"time"
 
@@ -25,7 +24,6 @@ func RunUploader(client *Client, s *store.Store) {
 		}
 
 		for _, tr := range trs {
-			fmt.Println(tr)
 			s.AddPoint("glucose", &store.TimePoint{
 				Time:  tr.Time,
 				Value: tr.Mmol,

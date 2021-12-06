@@ -14,6 +14,8 @@ services:
       dockerfile: ./docker/go/Go.Dockerfile
     environment:
       - DISCORD_TOKEN=${DISCORD_TOKEN}
+      - DEXCOM_ACCOUNT=${DEXCOM_ACCOUNT}
+      - DEXCOM_PASSWORD=${DEXCOM_PASSWORD}
     volumes:
       - type: bind
         source: ./data

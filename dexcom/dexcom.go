@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/algao1/ichor/store"
 )
 
 const (
@@ -19,19 +21,6 @@ const (
 	loginEndpoint    = "General/LoginPublisherAccountByName"
 	authEndpoint     = "General/AuthenticatePublisherAccount"
 	readingsEndpoint = "Publisher/ReadPublisherLatestGlucoseValues"
-)
-
-type Trend int
-
-const (
-	DoubleUp Trend = iota
-	SingleUp
-	HalfUp
-	Flat
-	HalfDown
-	SingleDown
-	DoubleDown
-	Missing
 )
 
 type Client struct {
@@ -59,7 +48,7 @@ type Reading struct {
 type TransformedReading struct {
 	Time  time.Time
 	Mmol  float64
-	Trend Trend
+	Trend store.Trend
 }
 
 type Option func(*Client)
@@ -121,24 +110,24 @@ func Transform(r *Reading, loc *time.Location) (*TransformedReading, error) {
 		return nil, err
 	}
 
-	var trend Trend
+	var trend store.Trend
 	switch r.Trend {
 	case "DoubleUp":
-		trend = DoubleUp
+		trend = store.DoubleUp
 	case "SingleUp":
-		trend = SingleUp
+		trend = store.SingleUp
 	case "FortyFiveUp":
-		trend = HalfUp
+		trend = store.HalfUp
 	case "Flat":
-		trend = Flat
+		trend = store.Flat
 	case "FortyFiveDown":
-		trend = HalfDown
+		trend = store.HalfDown
 	case "SingleDown":
-		trend = SingleDown
+		trend = store.SingleDown
 	case "DoubleDown":
-		trend = DoubleDown
+		trend = store.DoubleDown
 	default:
-		trend = Missing
+		trend = store.Missing
 	}
 
 	return &TransformedReading{

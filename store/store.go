@@ -3,6 +3,7 @@ package store
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"math"
 	"time"
@@ -15,11 +16,6 @@ import (
 
 type Store struct {
 	DB *bolt.DB
-}
-
-type TimePoint struct {
-	Time  time.Time
-	Value float64
 }
 
 func Create() (*Store, error) {
@@ -51,10 +47,12 @@ func (s *Store) AddPoint(field string, pt *TimePoint) error {
 			return fmt.Errorf("unable to find bucket: %s", field)
 		}
 
-		var vbuf [8]byte
-		binary.BigEndian.PutUint64(vbuf[:], math.Float64bits(pt.Value))
+		encoded, err := json.Marshal(pt)
+		if err != nil {
+			return err
+		}
 
-		return b.Put(timeToBytes(pt.Time), vbuf[:])
+		return b.Put(timeToBytes(pt.Time), encoded)
 	})
 }
 
@@ -73,7 +71,14 @@ func (s *Store) GetPoints(start, end time.Time, field string) ([]*TimePoint, err
 
 		c := b.Cursor()
 		for k, v := c.Seek(min); k != nil && bytes.Compare(k, max) <= 0; k, v = c.Next() {
-			pts = append(pts, &TimePoint{bytesToTime(k), bytesToFloat64(v)})
+			var pt TimePoint
+
+			err := json.Unmarshal(v, &pt)
+			if err != nil {
+				return err
+			}
+
+			pts = append(pts, &pt)
 		}
 
 		return nil
@@ -96,7 +101,15 @@ func (s *Store) GetLastPoints(field string, last int) ([]*TimePoint, error) {
 
 		c := b.Cursor()
 		for k, v := c.Last(); k != nil && last > 0; k, v = c.Prev() {
-			pts = append(pts, &TimePoint{bytesToTime(k), bytesToFloat64(v)})
+			var pt TimePoint
+
+			err := json.Unmarshal(v, &pt)
+			if err != nil {
+				return err
+			}
+
+			pts = append(pts, &pt)
+
 			last--
 		}
 
