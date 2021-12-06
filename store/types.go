@@ -2,6 +2,11 @@ package store
 
 import "time"
 
+const (
+	FieldGlucose     = "glucose"
+	FieldGlucosePred = "glucose-pred"
+)
+
 type Trend int
 
 const (

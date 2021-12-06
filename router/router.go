@@ -43,7 +43,7 @@ func uploadGlucose(s *store.Store) func(*gin.Context) {
 					log.Fatal(err)
 				}
 
-				s.AddPoint("glucose", &store.TimePoint{Time: date, Value: val})
+				s.AddPoint(store.FieldGlucose, &store.TimePoint{Time: date, Value: val})
 			}
 
 			c.JSON(http.StatusOK, gin.H{"status": "ok"})

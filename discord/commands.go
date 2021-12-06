@@ -57,7 +57,7 @@ func cmdGetGlucoseData(dg *discordgo.Session, m *discordgo.MessageCreate, s *sto
 
 	timeUnit *= time.Duration(n)
 
-	pts, err := s.GetPoints(time.Now().Add(-timeUnit), time.Now(), "glucose")
+	pts, err := s.GetPoints(time.Now().Add(-timeUnit), time.Now(), store.FieldGlucose)
 	if err != nil {
 		msg = fmt.Sprintf("unable to get points: %s", err)
 		_, err := dg.ChannelMessageSend(m.ChannelID, inlineStr(msg))
@@ -84,7 +84,7 @@ func cmdGetGlucoseData(dg *discordgo.Session, m *discordgo.MessageCreate, s *sto
 func cmdGetPredictions(dg *discordgo.Session, m *discordgo.MessageCreate, s *store.Store, args []string) error {
 	var msg string
 
-	pts, err := s.GetLastPoints("glucose", 1)
+	pts, err := s.GetLastPoints(store.FieldGlucose, 1)
 	if err != nil {
 		msg = fmt.Sprintf("unable to get points: %s", err)
 		_, err := dg.ChannelMessageSend(m.ChannelID, inlineStr(msg))
@@ -92,7 +92,7 @@ func cmdGetPredictions(dg *discordgo.Session, m *discordgo.MessageCreate, s *sto
 	}
 	pt := pts[0]
 
-	preds, err := s.GetPoints(time.Now(), time.Now().Add(2*time.Hour), "glucose-pred")
+	preds, err := s.GetPoints(time.Now(), time.Now().Add(2*time.Hour), store.FieldGlucosePred)
 	if err != nil {
 		msg = fmt.Sprintf("unable to get predictions: %s", err)
 		_, err := dg.ChannelMessageSend(m.ChannelID, inlineStr(msg))

@@ -27,15 +27,14 @@ func Create() (*Store, error) {
 }
 
 // Initialize stands up the necessary buckets for future transactions.
-//		TODO: Initialize from a manifest file.
 func (s *Store) Initialize() error {
 	return s.DB.Update(func(tx *bolt.Tx) error {
-		_, err := tx.CreateBucketIfNotExists([]byte("glucose"))
+		_, err := tx.CreateBucketIfNotExists([]byte(FieldGlucose))
 		if err != nil {
 			return fmt.Errorf("unable to create bucket: %w", err)
 		}
 
-		_, err = tx.CreateBucketIfNotExists([]byte("glucose-pred"))
+		_, err = tx.CreateBucketIfNotExists([]byte(FieldGlucosePred))
 		if err != nil {
 			return fmt.Errorf("unable to create bucket: %w", err)
 		}

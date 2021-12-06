@@ -24,7 +24,7 @@ func RunUploader(client *Client, s *store.Store) {
 		}
 
 		for _, tr := range trs {
-			s.AddPoint("glucose", &store.TimePoint{
+			s.AddPoint(store.FieldGlucose, &store.TimePoint{
 				Time:  tr.Time,
 				Value: tr.Mmol,
 			})

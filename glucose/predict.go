@@ -53,7 +53,7 @@ func RunPredictor(client *Client, s *store.Store) {
 	for {
 		<-ticker.C
 
-		pastPoints, err := s.GetLastPoints("glucose", 24)
+		pastPoints, err := s.GetLastPoints(store.FieldGlucose, 24)
 		if err != nil {
 			log.Printf("Failed to get past points: %s\n", err)
 			continue
@@ -67,7 +67,7 @@ func RunPredictor(client *Client, s *store.Store) {
 
 		fmt.Println(ftp.Time, ftp.Value)
 
-		s.AddPoint("glucose-pred", &store.TimePoint{
+		s.AddPoint(store.FieldGlucosePred, &store.TimePoint{
 			Time:  ftp.Time.Add(24 * 5 * time.Minute),
 			Value: ftp.Value,
 			Trend: ftp.Trend,
