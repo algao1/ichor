@@ -25,9 +25,10 @@ func (c *Client) Predict(ctx context.Context, pts []*store.TimePoint) (*store.Ti
 		return nil, fmt.Errorf("no points given")
 	}
 
-	values := make([]float64, len(pts))
+	n := len(pts)
+	values := make([]float64, n)
 	for i, pt := range pts {
-		values[i] = pt.Value
+		values[n-i-1] = pt.Value
 	}
 
 	pred, err := c.gc.Predict(ctx, &pb.Features{
