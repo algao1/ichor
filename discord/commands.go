@@ -10,17 +10,6 @@ import (
 	"gonum.org/v1/gonum/stat"
 )
 
-var loc, _ = time.LoadLocation("Canada/Eastern")
-
-const (
-	GlucoseDataUsage    = "!glucose h/d/w/m #"
-	GlucosePredictUsage = "!predict"
-)
-
-func inlineStr(s string) string {
-	return fmt.Sprintf("```\n%s```", s)
-}
-
 func cmdGetGlucoseData(dg *discordgo.Session, m *discordgo.MessageCreate, s *store.Store, args []string) error {
 	var msg string
 
@@ -67,7 +56,7 @@ func cmdGetGlucoseData(dg *discordgo.Session, m *discordgo.MessageCreate, s *sto
 	x := make([]float64, len(pts))
 
 	for i, pt := range pts {
-		msg += fmt.Sprintf("%s %5.2f\n", pt.Time.In(loc).Format("2006-01-02 03:04 PM"), pt.Value)
+		msg += fmt.Sprintf("%s %5.2f\n", localFormat(pt.Time), pt.Value)
 		x[i] = pt.Value
 	}
 
@@ -99,9 +88,9 @@ func cmdGetPredictions(dg *discordgo.Session, m *discordgo.MessageCreate, s *sto
 		return err
 	}
 
-	msg += fmt.Sprintf("%s %5.2f (current)\n", pt.Time.In(loc).Format("2006-01-02 03:04 PM"), pt.Value)
+	msg += fmt.Sprintf("%s %5.2f (current)\n", localFormat(pt.Time), pt.Value)
 	for _, pred := range preds {
-		msg += fmt.Sprintf("%s %5.2f\n", pred.Time.In(loc).Format("2006-01-02 03:04 PM"), pred.Value)
+		msg += fmt.Sprintf("%s %5.2f\n", localFormat(pred.Time), pred.Value)
 	}
 
 	_, err = dg.ChannelMessageSend(m.ChannelID, inlineStr(msg))

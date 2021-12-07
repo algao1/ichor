@@ -6,6 +6,9 @@ const (
 	FieldGlucose     = "glucose"
 	FieldGlucosePred = "glucose-pred"
 	FieldObject      = "obj"
+
+	IndexConfig        = "config"
+	IndexTimeoutExpore = "timeout-expire"
 )
 
 type Trend int
@@ -25,4 +28,10 @@ type TimePoint struct {
 	Time  time.Time
 	Value float64
 	Trend Trend
+}
+
+type Config struct {
+	WarningTimeout time.Duration
+	LowThreshold   float64
+	HighThreshold  float64
 }

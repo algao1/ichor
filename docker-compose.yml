@@ -15,6 +15,7 @@ services:
       dockerfile: ./docker/go/Go.Dockerfile
     container_name: client
     environment:
+      - USER_ID=${USER_ID}
       - DISCORD_TOKEN=${DISCORD_TOKEN}
       - DEXCOM_ACCOUNT=${DEXCOM_ACCOUNT}
       - DEXCOM_PASSWORD=${DEXCOM_PASSWORD}

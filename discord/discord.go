@@ -1,6 +1,7 @@
 package discord
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/algao1/ichor/store"
@@ -8,21 +9,23 @@ import (
 )
 
 type DiscordBot struct {
-	dg *discordgo.Session
+	UserID string
+
+	dg     *discordgo.Session
+	s      *store.Store
+	alerts <-chan Alert
 }
 
-func Create(token string, s *store.Store) (*DiscordBot, error) {
+func Create(uid, token string, s *store.Store, alertCh <-chan Alert) (*DiscordBot, error) {
 	dg, err := discordgo.New("Bot " + token)
 	if err != nil {
 		return nil, err
 	}
-
-	addHandlers(dg, s)
-
-	return &DiscordBot{dg}, nil
+	return &DiscordBot{uid, dg, s, alertCh}, nil
 }
 
 func (b *DiscordBot) Run() error {
+	b.addHandlers()
 	return b.dg.Open()
 }
 
@@ -30,16 +33,57 @@ func (b *DiscordBot) Stop() error {
 	return b.dg.Close()
 }
 
-func addHandlers(dg *discordgo.Session, s *store.Store) {
-	dg.Identify.Intents = discordgo.IntentsDirectMessages
+func (b *DiscordBot) addHandlers() {
+	b.dg.Identify.Intents = discordgo.IntentsDirectMessages
+	b.dg.AddHandler(makeMessageCreate(b.UserID, b.s))
 
-	dg.AddHandler(makeMessageCreate(s))
+	if b.alerts != nil {
+		go b.handleAlerts()
+	}
 }
 
-func makeMessageCreate(s *store.Store) func(*discordgo.Session, *discordgo.MessageCreate) {
+func (b *DiscordBot) handleAlerts() {
+	uch, err := b.dg.UserChannelCreate(b.UserID)
+	if err != nil {
+		panic(err) // Panic for now, since we cannot do anything if uid is wrong.
+	}
+
+	for {
+		select {
+		case alert := <-b.alerts:
+			var msg string
+
+			pts, err := b.s.GetLastPoints(store.FieldGlucosePred, 1)
+			if err != nil {
+				msg = fmt.Sprintf("unable to get points: %s", err)
+				b.dg.ChannelMessageSend(uch.ID, inlineStr(msg))
+				continue
+			}
+			pt := pts[0]
+
+			if alert == Low {
+				msg = fmt.Sprintf(
+					"🔻 incoming low blood sugar\n%s %5.2f",
+					localFormat(pt.Time),
+					pt.Value,
+				)
+				b.dg.ChannelMessageSend(uch.ID, inlineStr(msg))
+			} else {
+				msg = fmt.Sprintf(
+					"🔺 incoming high blood sugar\n%s %5.2f",
+					localFormat(pt.Time),
+					pt.Value,
+				)
+				b.dg.ChannelMessageSend(uch.ID, inlineStr(msg))
+			}
+		}
+	}
+}
+
+func makeMessageCreate(uid string, s *store.Store) func(*discordgo.Session, *discordgo.MessageCreate) {
 	return func(dg *discordgo.Session, m *discordgo.MessageCreate) {
 		// If the author is the bot, don't do anything.
-		if m.Author.ID == dg.State.User.ID {
+		if m.Author.ID != uid {
 			return
 		}
 

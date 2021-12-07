@@ -6,15 +6,17 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
-	"github.com/algao1/ichor/dexcom"
 	"github.com/algao1/ichor/discord"
-	"github.com/algao1/ichor/glucose"
+	"github.com/algao1/ichor/glucose/dexcom"
+	"github.com/algao1/ichor/glucose/predictor"
 	"github.com/algao1/ichor/store"
 	"google.golang.org/grpc"
 )
 
 var (
+	uid         string
 	token       string
 	dexAccount  string
 	dexPassword string
@@ -22,7 +24,8 @@ var (
 )
 
 func init() {
-	flag.StringVar(&token, "t", "", "bot token")
+	flag.StringVar(&token, "t", "", "discord bot token")
+	flag.StringVar(&uid, "u", "", "discord user id")
 	flag.StringVar(&dexAccount, "a", "", "dexcom account")
 	flag.StringVar(&dexPassword, "p", "", "dexcom password")
 	flag.StringVar(&serverAddr, "s", "localhost:50051", "inference server address")
@@ -37,26 +40,35 @@ func main() {
 	}
 	s.Initialize()
 
+	// Will temporarily overwrite all previous configs.
+	s.AddObject(store.IndexConfig, store.Config{
+		WarningTimeout: 1 * time.Hour,
+		LowThreshold:   3.7,
+		HighThreshold:  10.0,
+	})
+
 	dc := dexcom.New(dexAccount, dexPassword)
-	go dexcom.RunUploader(dc, s)
+	go RunUploader(dc, s)
+
+	alertCh := make(chan discord.Alert)
+
+	db, err := discord.Create(uid, token, s, alertCh)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	conn, err := grpc.Dial(serverAddr, grpc.WithInsecure())
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	predictor := glucose.New(conn)
-	go glucose.RunPredictor(predictor, s)
+	p := predictor.New(conn)
+	go RunPredictor(p, s, alertCh)
 
-	db, err := discord.Create(token, s)
-	if err != nil {
-		log.Fatal(err)
-	}
 	db.Run()
+	defer db.Stop()
 
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	<-sc
-
-	db.Stop()
 }
