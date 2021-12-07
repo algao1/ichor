@@ -1,10 +1,8 @@
-package glucose
+package predictor
 
 import (
 	"context"
 	"fmt"
-	"log"
-	"time"
 
 	"github.com/algao1/ichor/pb"
 	"github.com/algao1/ichor/store"
@@ -45,32 +43,4 @@ func (c *Client) Predict(ctx context.Context, pts []*store.TimePoint) (*store.Ti
 		Time:  pred.GetTime().AsTime(),
 		Trend: store.Missing,
 	}, nil
-}
-
-func RunPredictor(client *Client, s *store.Store) {
-	ticker := time.NewTicker(1 * time.Minute)
-
-	for {
-		<-ticker.C
-
-		pastPoints, err := s.GetLastPoints(store.FieldGlucose, 24)
-		if err != nil {
-			log.Printf("Failed to get past points: %s\n", err)
-			continue
-		}
-
-		ftp, err := client.Predict(context.Background(), pastPoints)
-		if err != nil {
-			log.Printf("Failed to make a prediction: %s\n", err)
-			continue
-		}
-
-		fmt.Println(ftp.Time, ftp.Value)
-
-		s.AddPoint(store.FieldGlucosePred, &store.TimePoint{
-			Time:  ftp.Time.Add(24 * 5 * time.Minute),
-			Value: ftp.Value,
-			Trend: ftp.Trend,
-		})
-	}
 }
