@@ -5,6 +5,7 @@ import "time"
 const (
 	FieldGlucose     = "glucose"
 	FieldGlucosePred = "glucose-pred"
+	FieldObject      = "obj"
 )
 
 type Trend int

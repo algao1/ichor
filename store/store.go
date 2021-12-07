@@ -39,6 +39,11 @@ func (s *Store) Initialize() error {
 			return fmt.Errorf("unable to create bucket: %w", err)
 		}
 
+		_, err = tx.CreateBucketIfNotExists([]byte(FieldObject))
+		if err != nil {
+			return fmt.Errorf("unable to create bucket: %w", err)
+		}
+
 		return nil
 	})
 }
@@ -125,6 +130,45 @@ func (s *Store) GetLastPoints(field string, last int) ([]*TimePoint, error) {
 	}
 
 	return pts, nil
+}
+
+func (s *Store) AddObject(index string, obj interface{}) error {
+	return s.DB.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(FieldObject))
+		if b == nil {
+			return fmt.Errorf("unable to find bucket: %s", FieldObject)
+		}
+
+		encoded, err := json.Marshal(obj)
+		if err != nil {
+			return err
+		}
+
+		return b.Put([]byte(index), encoded)
+	})
+}
+
+func (s *Store) GetObject(index string) ([]byte, error) {
+	var obj []byte
+
+	err := s.DB.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(FieldObject))
+		if b == nil {
+			return fmt.Errorf("unable to find bucket: %s", FieldObject)
+		}
+
+		obj = b.Get([]byte(index))
+		if obj == nil {
+			return fmt.Errorf("unable to find key: %s", index)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return obj, nil
 }
 
 func timeToBytes(t time.Time) []byte {
