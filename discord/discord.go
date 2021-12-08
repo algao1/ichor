@@ -55,30 +55,37 @@ func (b *DiscordBot) handleAlerts() {
 		var msg string
 		alert := <-b.alerts
 
-		// This is also not great; lack of error handling.
-		pts, err := b.s.GetLastPoints(store.FieldGlucosePred, 1)
+		obs, err := b.s.GetLastPoints(store.FieldGlucose, 1)
 		if err != nil {
 			msg = fmt.Sprintf("unable to get points: %s", err)
 			b.dg.ChannelMessageSend(b.cid, msg)
 			continue
 		}
-		pt := pts[0]
+		ob := obs[0]
+
+		preds, err := b.s.GetLastPoints(store.FieldGlucosePred, 1)
+		if err != nil {
+			msg = fmt.Sprintf("unable to get points: %s", err)
+			b.dg.ChannelMessageSend(b.cid, msg)
+			continue
+		}
+		pr := preds[0]
 
 		if alert == Low {
 			msg = fmt.Sprintf(
-				"🔻 incoming low blood sugar\n%s %5.2f",
-				localFormat(pt.Time),
-				pt.Value,
+				"🔻 incoming low blood sugar\n%s %5.2f\n%s %5.2f",
+				localFormat(ob.Time), ob.Value,
+				localFormat(pr.Time), pr.Value,
 			)
-			b.dg.ChannelMessageSend(b.cid, msg)
 		} else {
 			msg = fmt.Sprintf(
-				"🔺 incoming high blood sugar\n%s %5.2f",
-				localFormat(pt.Time),
-				pt.Value,
+				"🔺 incoming high blood sugar\n%s %5.2f\n%s %5.2f",
+				localFormat(ob.Time), ob.Value,
+				localFormat(pr.Time), pr.Value,
 			)
-			b.dg.ChannelMessageSend(b.cid, msg)
 		}
+
+		b.dg.ChannelMessageSend(b.cid, msg)
 	}
 }
 
