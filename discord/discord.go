@@ -53,10 +53,11 @@ func (b *DiscordBot) handleAlerts() {
 		case alert := <-b.alerts:
 			var msg string
 
+			// This is also not great; lack of error handling.
 			pts, err := b.s.GetLastPoints(store.FieldGlucosePred, 1)
 			if err != nil {
 				msg = fmt.Sprintf("unable to get points: %s", err)
-				b.dg.ChannelMessageSend(uch.ID, inlineStr(msg))
+				b.dg.ChannelMessageSend(uch.ID, msg)
 				continue
 			}
 			pt := pts[0]
@@ -67,14 +68,14 @@ func (b *DiscordBot) handleAlerts() {
 					localFormat(pt.Time),
 					pt.Value,
 				)
-				b.dg.ChannelMessageSend(uch.ID, inlineStr(msg))
+				b.dg.ChannelMessageSend(uch.ID, msg)
 			} else {
 				msg = fmt.Sprintf(
 					"🔺 incoming high blood sugar\n%s %5.2f",
 					localFormat(pt.Time),
 					pt.Value,
 				)
-				b.dg.ChannelMessageSend(uch.ID, inlineStr(msg))
+				b.dg.ChannelMessageSend(uch.ID, msg)
 			}
 		}
 	}

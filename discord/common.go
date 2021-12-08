@@ -1,7 +1,6 @@
 package discord
 
 import (
-	"fmt"
 	"time"
 )
 
@@ -23,8 +22,4 @@ const (
 
 func localFormat(t time.Time) string {
 	return t.In(loc).Format(TimeFormat)
-}
-
-func inlineStr(s string) string {
-	return fmt.Sprintf("```\n%s```", s)
 }
