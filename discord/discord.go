@@ -9,10 +9,11 @@ import (
 )
 
 type DiscordBot struct {
-	UserID string
+	dg *discordgo.Session
+	s  *store.Store
 
-	dg     *discordgo.Session
-	s      *store.Store
+	uid    string
+	cid    string
 	alerts <-chan Alert
 }
 
@@ -21,7 +22,14 @@ func Create(uid, token string, s *store.Store, alertCh <-chan Alert) (*DiscordBo
 	if err != nil {
 		return nil, err
 	}
-	return &DiscordBot{uid, dg, s, alertCh}, nil
+
+	// Verify that we can create a private channel.
+	uch, err := dg.UserChannelCreate(uid)
+	if err != nil {
+		return nil, err
+	}
+
+	return &DiscordBot{dg, s, uid, uch.ID, alertCh}, nil
 }
 
 func (b *DiscordBot) Run() error {
@@ -35,7 +43,7 @@ func (b *DiscordBot) Stop() error {
 
 func (b *DiscordBot) addHandlers() {
 	b.dg.Identify.Intents = discordgo.IntentsDirectMessages
-	b.dg.AddHandler(makeMessageCreate(b.UserID, b.s))
+	b.dg.AddHandler(makeMessageCreate(b.uid, b.s))
 
 	if b.alerts != nil {
 		go b.handleAlerts()
@@ -43,40 +51,33 @@ func (b *DiscordBot) addHandlers() {
 }
 
 func (b *DiscordBot) handleAlerts() {
-	uch, err := b.dg.UserChannelCreate(b.UserID)
-	if err != nil {
-		panic(err) // Panic for now, since we cannot do anything if uid is wrong.
-	}
-
 	for {
-		select {
-		case alert := <-b.alerts:
-			var msg string
+		var msg string
+		alert := <-b.alerts
 
-			// This is also not great; lack of error handling.
-			pts, err := b.s.GetLastPoints(store.FieldGlucosePred, 1)
-			if err != nil {
-				msg = fmt.Sprintf("unable to get points: %s", err)
-				b.dg.ChannelMessageSend(uch.ID, msg)
-				continue
-			}
-			pt := pts[0]
+		// This is also not great; lack of error handling.
+		pts, err := b.s.GetLastPoints(store.FieldGlucosePred, 1)
+		if err != nil {
+			msg = fmt.Sprintf("unable to get points: %s", err)
+			b.dg.ChannelMessageSend(b.cid, msg)
+			continue
+		}
+		pt := pts[0]
 
-			if alert == Low {
-				msg = fmt.Sprintf(
-					"🔻 incoming low blood sugar\n%s %5.2f",
-					localFormat(pt.Time),
-					pt.Value,
-				)
-				b.dg.ChannelMessageSend(uch.ID, msg)
-			} else {
-				msg = fmt.Sprintf(
-					"🔺 incoming high blood sugar\n%s %5.2f",
-					localFormat(pt.Time),
-					pt.Value,
-				)
-				b.dg.ChannelMessageSend(uch.ID, msg)
-			}
+		if alert == Low {
+			msg = fmt.Sprintf(
+				"🔻 incoming low blood sugar\n%s %5.2f",
+				localFormat(pt.Time),
+				pt.Value,
+			)
+			b.dg.ChannelMessageSend(b.cid, msg)
+		} else {
+			msg = fmt.Sprintf(
+				"🔺 incoming high blood sugar\n%s %5.2f",
+				localFormat(pt.Time),
+				pt.Value,
+			)
+			b.dg.ChannelMessageSend(b.cid, msg)
 		}
 	}
 }
@@ -87,6 +88,9 @@ func makeMessageCreate(uid string, s *store.Store) func(*discordgo.Session, *dis
 		if m.Author.ID != uid {
 			return
 		}
+
+		// Definitely need to make command handling/parsing a little
+		// more robust.
 
 		parsed := strings.Fields(m.Content)
 		cmd := parsed[0]
