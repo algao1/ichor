@@ -2,71 +2,81 @@ package discord
 
 import (
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/algao1/ichor/store"
-	"github.com/bwmarrin/discordgo"
+	"github.com/diamondburned/arikawa/discord"
+	"github.com/diamondburned/arikawa/gateway"
+	"github.com/diamondburned/arikawa/session"
 )
 
-type DiscordBot struct {
-	dg *discordgo.Session
-	s  *store.Store
-
-	uid    string
-	cid    string
+type Bot struct {
+	ses    *session.Session
+	sto    *store.Store
 	alerts <-chan Alert
+
+	uid  discord.UserID
+	chid discord.ChannelID
 }
 
-func Create(uid, token string, s *store.Store, alertCh <-chan Alert) (*DiscordBot, error) {
-	dg, err := discordgo.New("Bot " + token)
+func Create(token string, uid float64, sto *store.Store, alertCh <-chan Alert) (*Bot, error) {
+	ses, err := session.New("Bot " + token)
 	if err != nil {
 		return nil, err
 	}
 
 	// Verify that we can create a private channel.
-	uch, err := dg.UserChannelCreate(uid)
+	duid := discord.UserID(uid)
+	uch, err := ses.Client.CreatePrivateChannel(duid)
 	if err != nil {
 		return nil, err
 	}
 
-	return &DiscordBot{dg, s, uid, uch.ID, alertCh}, nil
-}
+	b := &Bot{
+		ses:    ses,
+		sto:    sto,
+		alerts: alertCh,
+		uid:    duid,
+		chid:   uch.ID,
+	}
 
-func (b *DiscordBot) Run() error {
-	b.addHandlers()
-	return b.dg.Open()
-}
+	// Add handlers.
+	ses.Gateway.AddIntent(gateway.IntentDirectMessages)
+	ses.AddHandler(b.makeMessageCreate())
 
-func (b *DiscordBot) Stop() error {
-	return b.dg.Close()
-}
-
-func (b *DiscordBot) addHandlers() {
-	b.dg.Identify.Intents = discordgo.IntentsDirectMessages
-	b.dg.AddHandler(makeMessageCreate(b.uid, b.s))
-
-	if b.alerts != nil {
+	if alertCh != nil {
 		go b.handleAlerts()
 	}
+
+	return b, nil
 }
 
-func (b *DiscordBot) handleAlerts() {
+func (b *Bot) Run() error {
+	return b.ses.Open()
+}
+
+func (b *Bot) Stop() error {
+	return b.ses.Close()
+}
+
+func (b *Bot) handleAlerts() {
 	for {
 		var msg string
 		alert := <-b.alerts
 
-		obs, err := b.s.GetLastPoints(store.FieldGlucose, 1)
+		obs, err := b.sto.GetLastPoints(store.FieldGlucose, 1)
 		if err != nil {
 			msg = fmt.Sprintf("unable to get points: %s", err)
-			b.dg.ChannelMessageSend(b.cid, msg)
+			sendWarnMessage(b.ses, b.chid, msg)
 			continue
 		}
 		ob := obs[0]
 
-		preds, err := b.s.GetLastPoints(store.FieldGlucosePred, 1)
+		preds, err := b.sto.GetLastPoints(store.FieldGlucosePred, 1)
 		if err != nil {
 			msg = fmt.Sprintf("unable to get points: %s", err)
-			b.dg.ChannelMessageSend(b.cid, msg)
+			sendWarnMessage(b.ses, b.chid, msg)
 			continue
 		}
 		pr := preds[0]
@@ -85,28 +95,32 @@ func (b *DiscordBot) handleAlerts() {
 			)
 		}
 
-		b.dg.ChannelMessageSend(b.cid, msg)
+		b.ses.SendEmbed(b.chid, discord.Embed{
+			Description: msg,
+			Color:       discord.Color(WarnLevel5),
+		})
 	}
 }
 
-func makeMessageCreate(uid string, s *store.Store) func(*discordgo.Session, *discordgo.MessageCreate) {
-	return func(dg *discordgo.Session, m *discordgo.MessageCreate) {
-		// If the author is the bot, don't do anything.
-		if m.Author.ID != uid {
-			return
+func (b *Bot) makeMessageCreate() func(c *gateway.MessageCreateEvent) {
+	return func(c *gateway.MessageCreateEvent) {
+		m, err := b.ses.Message(b.chid, c.ID)
+		if err != nil {
+			log.Println("Message not found:", c.ID)
 		}
 
-		// Definitely need to make command handling/parsing a little
-		// more robust.
+		if m.Author.ID != b.uid {
+			return
+		}
 
 		parsed := strings.Fields(m.Content)
 		cmd := parsed[0]
 
 		switch cmd {
 		case "!glucose":
-			cmdGetGlucoseData(dg, m, s, parsed[1:])
+			b.cmdSendGlucoseData(parsed[1:])
 		case "!weekly":
-			cmdGetWeeklyReport(dg, m, s, parsed[1:])
+			b.cmdSendWeeklyReport(parsed[1:])
 		default:
 		}
 	}

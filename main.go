@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -52,7 +53,12 @@ func main() {
 
 	alertCh := make(chan discord.Alert)
 
-	db, err := discord.Create(uid, token, s, alertCh)
+	puid, err := strconv.ParseFloat(uid, 64)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	db, err := discord.Create(token, puid, s, alertCh)
 	if err != nil {
 		log.Fatal(err)
 	}

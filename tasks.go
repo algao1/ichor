@@ -20,9 +20,9 @@ const (
 
 func RunUploader(client *dexcom.Client, s *store.Store) {
 	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
 
-	for {
-		t := <-ticker.C
+	for t := time.Now(); true; t = <-ticker.C {
 		trs, err := client.GetReadings(DefaultMinutes, DefaultMaxCount)
 		if err != nil {
 			log.Println("Failed to get readings: " + t.Format(time.RFC3339))
@@ -40,10 +40,9 @@ func RunUploader(client *dexcom.Client, s *store.Store) {
 
 func RunPredictor(client *predictor.Client, s *store.Store, alertCh chan<- discord.Alert) {
 	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
 
-	for {
-		<-ticker.C
-
+	for ; true; <-ticker.C {
 		pastPoints, err := s.GetLastPoints(store.FieldGlucose, 24)
 		if err != nil {
 			log.Printf("Failed to get past points: %s\n", err)
