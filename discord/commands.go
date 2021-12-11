@@ -7,9 +7,10 @@ import (
 	"time"
 
 	"github.com/algao1/ichor/store"
-	"github.com/diamondburned/arikawa/api"
-	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/arikawa/session"
+	"github.com/diamondburned/arikawa/v3/api"
+	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/diamondburned/arikawa/v3/session"
+	"github.com/diamondburned/arikawa/v3/utils/sendpart"
 	"gonum.org/v1/gonum/stat"
 )
 
@@ -21,13 +22,13 @@ const (
 	WarnLevel5 = 13382400 // #cc3300
 )
 
-func sendWarnMessage(s *session.Session, cid discord.ChannelID, desc string) {
-	s.SendMessageComplex(cid, api.SendMessageData{
-		Embed: &discord.Embed{
+func sendWarnMessage(ses *session.Session, cid discord.ChannelID, desc string) {
+	ses.SendMessageComplex(cid, api.SendMessageData{
+		Embeds: []discord.Embed{{
 			Title:       "Warning",
 			Description: desc,
 			Color:       discord.Color(WarnLevel3),
-		},
+		}},
 	})
 }
 
@@ -68,10 +69,10 @@ func (b *Bot) cmdSendGlucoseData(args []string) {
 	mean := stat.Mean(x, nil)
 	std := stat.StdDev(x, nil)
 
-	img := api.SendMessageFile{Name: "recentAndPreds.png", Reader: r}
+	img := sendpart.File{Name: "recentAndPreds.png", Reader: r}
 
 	b.ses.SendMessageComplex(b.chid, api.SendMessageData{
-		Embed: &discord.Embed{
+		Embeds: []discord.Embed{{
 			Title: "Recent Glucose & Predictions",
 			Image: &discord.EmbedImage{URL: "attachment://" + img.Name},
 			Fields: []discord.EmbedField{
@@ -81,8 +82,8 @@ func (b *Bot) cmdSendGlucoseData(args []string) {
 				{Name: "Standard Deviation", Value: floatToString(std)},
 			},
 			Color: discord.Color(WarnLevel1),
-		},
-		Files: []api.SendMessageFile{img},
+		}},
+		Files: []sendpart.File{img},
 	})
 }
 
@@ -129,14 +130,14 @@ func (b *Bot) cmdSendWeeklyReport(args []string) {
 		return
 	}
 
-	img := api.SendMessageFile{Name: "weeklyOverlay.png", Reader: r}
+	img := sendpart.File{Name: "weeklyOverlay.png", Reader: r}
 
 	b.ses.SendMessageComplex(b.chid, api.SendMessageData{
-		Embed: &discord.Embed{
-			Title: "Weekly OVerlay",
+		Embeds: []discord.Embed{{
+			Title: "Weekly Overlay",
 			Image: &discord.EmbedImage{URL: "attachment://" + img.Name},
 			Color: discord.Color(WarnLevel1),
-		},
-		Files: []api.SendMessageFile{img},
+		}},
+		Files: []sendpart.File{img},
 	})
 }

@@ -1,14 +1,15 @@
 package discord
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"strings"
 
 	"github.com/algao1/ichor/store"
-	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/arikawa/gateway"
-	"github.com/diamondburned/arikawa/session"
+	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/diamondburned/arikawa/v3/gateway"
+	"github.com/diamondburned/arikawa/v3/session"
 )
 
 type Bot struct {
@@ -42,7 +43,7 @@ func Create(token string, uid float64, sto *store.Store, alertCh <-chan Alert) (
 	}
 
 	// Add handlers.
-	ses.Gateway.AddIntent(gateway.IntentDirectMessages)
+	ses.AddIntents(gateway.IntentDirectMessages)
 	ses.AddHandler(b.makeMessageCreate())
 
 	if alertCh != nil {
@@ -53,7 +54,7 @@ func Create(token string, uid float64, sto *store.Store, alertCh <-chan Alert) (
 }
 
 func (b *Bot) Run() error {
-	return b.ses.Open()
+	return b.ses.Open(context.Background())
 }
 
 func (b *Bot) Stop() error {
@@ -95,7 +96,7 @@ func (b *Bot) handleAlerts() {
 			)
 		}
 
-		b.ses.SendEmbed(b.chid, discord.Embed{
+		b.ses.SendEmbeds(b.chid, discord.Embed{
 			Description: msg,
 			Color:       discord.Color(WarnLevel5),
 		})
