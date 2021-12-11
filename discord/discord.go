@@ -105,6 +105,8 @@ func makeMessageCreate(uid string, s *store.Store) func(*discordgo.Session, *dis
 		switch cmd {
 		case "!glucose":
 			cmdGetGlucoseData(dg, m, s, parsed[1:])
+		case "!weekly":
+			cmdGetWeeklyReport(dg, m, s, parsed[1:])
 		case "!predict":
 			cmdGetPredictions(dg, m, s, parsed[1:])
 		default:
