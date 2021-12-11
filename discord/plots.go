@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"image/color"
 	"io"
+	"math"
 	"time"
 
 	"github.com/algao1/ichor/store"
@@ -14,7 +15,7 @@ import (
 	"gonum.org/v1/plot/vg"
 )
 
-var warnColour = color.RGBA{R: 191, G: 191, B: 191}
+var warnColour, _ = colorful.Hex("#484a47")
 
 var (
 	MondayColour, _    = colorful.Hex("#517AB8")
@@ -59,23 +60,96 @@ func (t HourTicks) Ticks(min, max float64) []plot.Tick {
 	return ticks
 }
 
+type RecentTicks struct {
+	Ticker plot.Ticker
+	Time   func(t float64) time.Time
+}
+
+func (t RecentTicks) Ticks(min, max float64) []plot.Tick {
+	ticks := []plot.Tick{}
+
+	st := time.Unix(int64(min), 0).In(loc)
+	st = time.Date(st.Year(), st.Month(), st.Day(), st.Hour(), 0, 0, 0, loc)
+
+	et := time.Unix(int64(max), 0).In(loc)
+
+	for ; st.Before(et); st = st.Add(15 * time.Minute) {
+		tick := plot.Tick{Value: float64(st.Unix())}
+		if st.Minute() == 0 {
+			tick.Label = st.Format(HourFormat)
+		}
+		ticks = append(ticks, tick)
+	}
+
+	return ticks
+}
+
 func plotLowHighLines(min, max float64, p *plot.Plot) error {
-	tl, err := plotter.NewLine(plotter.XYs{plotter.XY{X: 0, Y: max}, plotter.XY{X: 24 * 3600, Y: max}})
+	tl, err := plotter.NewLine(plotter.XYs{plotter.XY{X: p.X.Min, Y: max}, plotter.XY{X: p.X.Max, Y: max}})
 	if err != nil {
 		return err
 	}
 	tl.LineStyle.Color = warnColour
+	tl.LineStyle.Width = vg.Points(1)
+	tl.LineStyle.Dashes = []vg.Length{vg.Points(5), vg.Points(10)}
 
-	bl, err := plotter.NewLine(plotter.XYs{plotter.XY{X: 0, Y: min}, plotter.XY{X: 24 * 3600, Y: min}})
+	bl, err := plotter.NewLine(plotter.XYs{plotter.XY{X: p.X.Min, Y: min}, plotter.XY{X: p.X.Max, Y: min}})
 	if err != nil {
 		return err
 	}
 	bl.LineStyle.Color = warnColour
+	bl.LineStyle.Width = vg.Points(1)
+	bl.LineStyle.Dashes = []vg.Length{vg.Points(5), vg.Points(10)}
 
-	p.Add(tl)
-	p.Add(bl)
+	p.Add(tl, bl)
 
 	return nil
+}
+
+func PlotRecentAndPreds(min, max float64, pts []*store.TimePoint, preds []*store.TimePoint) (io.Reader, error) {
+	if len(pts) == 0 {
+		return nil, fmt.Errorf("no points given")
+	}
+
+	p := plot.New()
+	p.Title.Text = "Current Values"
+	p.X.Label.Text = "Hour (EST)"
+	p.Y.Label.Text = "Glucose (mmol/l)"
+	p.X.Tick.Marker = RecentTicks{}
+
+	p.Y.Min = math.Max(0, min-1)
+
+	xys := make(plotter.XYs, len(pts))
+	for i, pt := range pts {
+		xys[i] = plotter.XY{X: float64(pt.Time.Unix()), Y: pt.Value}
+	}
+
+	l, err := plotter.NewLine(xys)
+	if err != nil {
+		return nil, err
+	}
+	p.Add(l)
+	p.Legend.Add("Observed", l)
+
+	// Plot predictions here...
+
+	err = plotLowHighLines(min, max, p)
+	if err != nil {
+		return nil, err
+	}
+
+	wt, err := p.WriterTo(18*vg.Inch, 6*vg.Inch, "png")
+	if err != nil {
+		return nil, err
+	}
+
+	buf := new(bytes.Buffer)
+	_, err = wt.WriteTo(buf)
+	if err != nil {
+		return nil, err
+	}
+
+	return buf, nil
 }
 
 func PlotOverlayWeekly(min, max float64, pts []*store.TimePoint) (io.Reader, error) {
@@ -94,6 +168,11 @@ func PlotOverlayWeekly(min, max float64, pts []*store.TimePoint) (io.Reader, err
 	p.X.Label.Text = "Hour (EST)"
 	p.Y.Label.Text = "Glucose (mmol/l)"
 	p.X.Tick.Marker = HourTicks{}
+
+	p.X.Min = 0
+	p.X.Max = 24 * 3600
+
+	p.Y.Min = math.Max(0, min-1)
 
 	dayPts := make(map[string]plotter.XYs)
 

@@ -1,7 +1,10 @@
 package discord
 
 import (
+	"strconv"
 	"time"
+
+	"github.com/algao1/ichor/store"
 )
 
 type Alert int
@@ -14,9 +17,8 @@ const (
 var loc, _ = time.LoadLocation("Canada/Eastern")
 
 const (
-	GlucoseDataUsage    = "!glucose h/d/w/m #"
-	GlucoseWeeklyUsage  = "!weekly [+/-]#"
-	GlucosePredictUsage = "!predict"
+	GlucoseDataUsage   = "!glucose"
+	GlucoseWeeklyUsage = "!weekly [+/-]#"
 
 	TimeFormat = "2006-01-02 03:04 PM"
 	HourFormat = "3 PM"
@@ -40,4 +42,29 @@ func daySeconds(t time.Time) int {
 
 func localFormat(t time.Time) string {
 	return t.In(loc).Format(TimeFormat)
+}
+
+func floatToString(v float64) string {
+	return strconv.FormatFloat(v, 'f', 2, 64)
+}
+
+func trendToString(t store.Trend) string {
+	switch t {
+	case store.DoubleUp:
+		return "↟"
+	case store.SingleUp:
+		return "↑"
+	case store.HalfUp:
+		return "↗"
+	case store.Flat:
+		return "→"
+	case store.HalfDown:
+		return "↘"
+	case store.SingleDown:
+		return "↓"
+	case store.DoubleDown:
+		return "↡"
+	default:
+		return "-"
+	}
 }

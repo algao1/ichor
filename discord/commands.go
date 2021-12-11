@@ -19,109 +19,69 @@ const (
 	WarnLevel5 = 13382400 // #cc3300
 )
 
-func sendEmbeddedMessage(dg *discordgo.Session, cid, title, desc string, color int, image *discordgo.File) {
-	var files []*discordgo.File
-	var url string
-
-	if image != nil {
-		url = "attachment://" + image.Name
-		files = []*discordgo.File{image}
-	}
-
+func sendWarnMessage(dg *discordgo.Session, cid, desc string) {
 	dg.ChannelMessageSendComplex(cid, &discordgo.MessageSend{
 		Embed: &discordgo.MessageEmbed{
-			Title:       title,
+			Title:       "Warning",
 			Description: desc,
-			Image:       &discordgo.MessageEmbedImage{URL: url},
-			Color:       color,
+			Color:       int(WarnLevel3),
 		},
-		Files: files,
 	})
 }
 
 func cmdGetGlucoseData(dg *discordgo.Session, m *discordgo.MessageCreate, s *store.Store, args []string) {
 	var msg string
 
-	// Note: Probably need to find a more elegant way to return error messages.
-	// 			 This is getting a little bit annoying...
-	if len(args) != 2 {
-		msg = fmt.Sprintf("need %d args but got %d: %s", 2, len(args), GlucoseDataUsage)
-		sendEmbeddedMessage(dg, m.ChannelID, "", msg, WarnLevel3, nil)
-		return
-	}
-
-	var timeUnit time.Duration
-	switch args[0] {
-	case "h":
-		timeUnit = time.Hour
-	case "d":
-		timeUnit = time.Hour * 24
-	case "w":
-		timeUnit = time.Hour * 7 * 24
-	case "m":
-		timeUnit = time.Hour * 4 * 7 * 24
-	default:
-		msg = fmt.Sprintf("unknown timeframe %s: %s", args[0], GlucoseDataUsage)
-		sendEmbeddedMessage(dg, m.ChannelID, "", msg, WarnLevel3, nil)
-		return
-	}
-
-	n, err := strconv.Atoi(args[1])
-	if err != nil {
-		msg = fmt.Sprintf("not a number %s: %s", args[1], GlucoseDataUsage)
-		sendEmbeddedMessage(dg, m.ChannelID, "", msg, WarnLevel3, nil)
-		return
-	}
-
-	timeUnit *= time.Duration(n)
-
-	pts, err := s.GetPoints(time.Now().Add(-timeUnit), time.Now(), store.FieldGlucose)
+	pts, err := s.GetPoints(time.Now().Add(-12*time.Hour), time.Now(), store.FieldGlucose)
 	if err != nil {
 		msg = fmt.Sprintf("unable to get points: %s", err)
-		sendEmbeddedMessage(dg, m.ChannelID, "", msg, WarnLevel3, nil)
+		sendWarnMessage(dg, m.ChannelID, msg)
 		return
 	}
 
 	x := make([]float64, len(pts))
-
 	for i, pt := range pts {
-		msg += fmt.Sprintf("%s %5.2f\n", localFormat(pt.Time), pt.Value)
 		x[i] = pt.Value
 	}
+
+	confObj, err := s.GetObject(store.IndexConfig)
+	if err != nil {
+		msg = fmt.Sprintf("unable to load config: %s", err)
+		sendWarnMessage(dg, m.ChannelID, msg)
+		return
+	}
+
+	var conf store.Config
+	json.Unmarshal(confObj, &conf)
+
+	r, err := PlotRecentAndPreds(conf.LowThreshold, conf.HighThreshold, pts, nil)
+	if err != nil {
+		msg = fmt.Sprintf("unable to generate graph: %s", err)
+		sendWarnMessage(dg, m.ChannelID, msg)
+		return
+	}
+
+	curPt := pts[len(pts)-1]
 
 	mean := stat.Mean(x, nil)
 	std := stat.StdDev(x, nil)
 
-	msg += "\n"
-	msg += fmt.Sprintf("mean: %.2f std: %.2f", mean, std)
+	img := &discordgo.File{Name: "recentAndPreds.png", Reader: r}
 
-	sendEmbeddedMessage(dg, m.ChannelID, "", msg, WarnLevel1, nil)
-}
-
-func cmdGetPredictions(dg *discordgo.Session, m *discordgo.MessageCreate, s *store.Store, args []string) {
-	var msg string
-
-	pts, err := s.GetLastPoints(store.FieldGlucose, 1)
-	if err != nil {
-		msg = fmt.Sprintf("unable to get points: %s", err)
-		sendEmbeddedMessage(dg, m.ChannelID, "", msg, WarnLevel3, nil)
-		return
-	}
-	pt := pts[0]
-
-	preds, err := s.GetPoints(time.Now(), time.Now().Add(2*time.Hour), store.FieldGlucosePred)
-	if err != nil {
-		msg = fmt.Sprintf("unable to get predictions: %s", err)
-		sendEmbeddedMessage(dg, m.ChannelID, "", msg, WarnLevel3, nil)
-		return
-	}
-
-	msg += fmt.Sprintf("%s %5.2f (current)\n", localFormat(pt.Time), pt.Value)
-	for _, pred := range preds {
-		msg += fmt.Sprintf("%s %5.2f\n", localFormat(pred.Time), pred.Value)
-	}
-
-	sendEmbeddedMessage(dg, m.ChannelID, "", msg, WarnLevel1, nil)
+	dg.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
+		Embed: &discordgo.MessageEmbed{
+			Title: "Recent Glucose & Predictions",
+			Image: &discordgo.MessageEmbedImage{URL: "attachment://" + img.Name},
+			Fields: []*discordgo.MessageEmbedField{
+				{Name: "Current", Value: floatToString(curPt.Value)},
+				{Name: "Trend", Value: trendToString(curPt.Trend)},
+				{Name: "Mean", Value: floatToString(mean)},
+				{Name: "Standard Deviation", Value: floatToString(std)},
+			},
+			Color: int(WarnLevel1),
+		},
+		Files: []*discordgo.File{img},
+	})
 }
 
 func cmdGetWeeklyReport(dg *discordgo.Session, m *discordgo.MessageCreate, s *store.Store, args []string) {
@@ -129,14 +89,14 @@ func cmdGetWeeklyReport(dg *discordgo.Session, m *discordgo.MessageCreate, s *st
 
 	if len(args) != 1 {
 		msg = fmt.Sprintf("need %d args but got %d: %s", 1, len(args), GlucoseWeeklyUsage)
-		sendEmbeddedMessage(dg, m.ChannelID, "", msg, WarnLevel3, nil)
+		sendWarnMessage(dg, m.ChannelID, msg)
 		return
 	}
 
 	n, err := strconv.Atoi(args[0])
 	if err != nil {
 		msg = fmt.Sprintf("not a number %s: %s", args[0], GlucoseWeeklyUsage)
-		sendEmbeddedMessage(dg, m.ChannelID, "", msg, WarnLevel3, nil)
+		sendWarnMessage(dg, m.ChannelID, msg)
 		return
 	}
 
@@ -146,14 +106,14 @@ func cmdGetWeeklyReport(dg *discordgo.Session, m *discordgo.MessageCreate, s *st
 	pts, err := s.GetPoints(ws, ws.AddDate(0, 0, 7), store.FieldGlucose)
 	if err != nil {
 		msg = fmt.Sprintf("unable to get points: %s", err)
-		sendEmbeddedMessage(dg, m.ChannelID, "", msg, WarnLevel3, nil)
+		sendWarnMessage(dg, m.ChannelID, msg)
 		return
 	}
 
 	confObj, err := s.GetObject(store.IndexConfig)
 	if err != nil {
 		msg = fmt.Sprintf("unable to load config: %s", err)
-		sendEmbeddedMessage(dg, m.ChannelID, "", msg, WarnLevel3, nil)
+		sendWarnMessage(dg, m.ChannelID, msg)
 		return
 	}
 
@@ -163,9 +123,18 @@ func cmdGetWeeklyReport(dg *discordgo.Session, m *discordgo.MessageCreate, s *st
 	r, err := PlotOverlayWeekly(conf.LowThreshold, conf.HighThreshold, pts)
 	if err != nil {
 		msg = fmt.Sprintf("unable to generate weekly plot: %s", err)
-		sendEmbeddedMessage(dg, m.ChannelID, "", msg, WarnLevel3, nil)
+		sendWarnMessage(dg, m.ChannelID, msg)
 		return
 	}
 
-	sendEmbeddedMessage(dg, m.ChannelID, "", msg, WarnLevel1, &discordgo.File{Name: "weeklyOverlay.png", Reader: r})
+	img := &discordgo.File{Name: "weeklyOverlay.png", Reader: r}
+
+	dg.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
+		Embed: &discordgo.MessageEmbed{
+			Title: "Weekly Overlay",
+			Image: &discordgo.MessageEmbedImage{URL: "attachment://" + img.Name},
+			Color: int(WarnLevel1),
+		},
+		Files: []*discordgo.File{img},
+	})
 }
