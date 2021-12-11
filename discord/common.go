@@ -51,7 +51,7 @@ func floatToString(v float64) string {
 func trendToString(t store.Trend) string {
 	switch t {
 	case store.DoubleUp:
-		return "↟"
+		return "⇈"
 	case store.SingleUp:
 		return "↑"
 	case store.HalfUp:
@@ -63,7 +63,7 @@ func trendToString(t store.Trend) string {
 	case store.SingleDown:
 		return "↓"
 	case store.DoubleDown:
-		return "↡"
+		return "⇊"
 	default:
 		return "-"
 	}

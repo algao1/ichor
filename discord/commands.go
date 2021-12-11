@@ -77,7 +77,7 @@ func (b *Bot) cmdSendGlucoseData(args []string) {
 			Image: &discord.EmbedImage{URL: "attachment://" + img.Name},
 			Fields: []discord.EmbedField{
 				{Name: "Current", Value: floatToString(curPt.Value)},
-				{Name: "Trend", Value: trendToString(curPt.Trend)},
+				{Name: "Trend", Value: "\\" + trendToString(curPt.Trend)},
 				{Name: "Mean", Value: floatToString(mean)},
 				{Name: "Standard Deviation", Value: floatToString(std)},
 			},
