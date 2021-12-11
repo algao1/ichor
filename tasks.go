@@ -33,6 +33,7 @@ func RunUploader(client *dexcom.Client, s *store.Store) {
 			s.AddPoint(store.FieldGlucose, &store.TimePoint{
 				Time:  tr.Time,
 				Value: tr.Mmol,
+				Trend: tr.Trend,
 			})
 		}
 	}
