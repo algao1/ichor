@@ -6,6 +6,7 @@ services:
       context: .
       dockerfile: ./docker/py/Py.Dockerfile
     container_name: server
+    restart: always
     ports:
       - "50051:50051" 
   
@@ -24,6 +25,7 @@ services:
       - type: bind
         source: ./data
         target: /go/src/ichor/data
+    restart: always
     ports:
       - "8080:8080"
     depends_on: 
