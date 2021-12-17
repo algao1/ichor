@@ -29,7 +29,7 @@ func RunUploader(client *dexcom.Client, s *store.Store) {
 		}
 
 		for _, tr := range trs {
-			s.AddPoint(store.FieldGlucose, &store.TimePoint{
+			s.AddPoint(store.FieldGlucose, tr.Time, &store.TimePoint{
 				Time:  tr.Time,
 				Value: tr.Mmol,
 				Trend: tr.Trend,
@@ -43,8 +43,8 @@ func RunPredictor(client *predictor.Client, s *store.Store, alertCh chan<- disco
 	defer ticker.Stop()
 
 	for ; true; <-ticker.C {
-		pastPoints, err := s.GetLastPoints(store.FieldGlucose, 24)
-		if err != nil {
+		var pastPoints []store.TimePoint
+		if err := s.GetLastPoints(store.FieldGlucose, 24, &pastPoints); err != nil {
 			log.Printf("Failed to get past points: %s\n", err)
 			continue
 		}
@@ -57,8 +57,9 @@ func RunPredictor(client *predictor.Client, s *store.Store, alertCh chan<- disco
 
 		fmt.Println(ftp.Time, ftp.Value)
 
-		s.AddPoint(store.FieldGlucosePred, &store.TimePoint{
-			Time:  ftp.Time.Add(24 * 5 * time.Minute),
+		ftime := ftp.Time.Add(24 * 5 * time.Minute)
+		s.AddPoint(store.FieldGlucosePred, ftime, &store.TimePoint{
+			Time:  ftime,
 			Value: ftp.Value,
 			Trend: ftp.Trend,
 		})

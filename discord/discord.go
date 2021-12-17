@@ -93,16 +93,16 @@ func (b *Bot) handleAlerts() {
 		var msg string
 		alert := <-b.alerts
 
-		obs, err := b.sto.GetLastPoints(store.FieldGlucose, 1)
-		if err != nil {
+		var obs []store.TimePoint
+		if err := b.sto.GetLastPoints(store.FieldGlucose, 1, &obs); err != nil {
 			msg = fmt.Sprintf("unable to get points: %s", err)
 			sendWarnMessage(b.ses, b.chid, msg)
 			continue
 		}
 		ob := obs[0]
 
-		preds, err := b.sto.GetLastPoints(store.FieldGlucosePred, 1)
-		if err != nil {
+		var preds []store.TimePoint
+		if err := b.sto.GetLastPoints(store.FieldGlucosePred, 1, &preds); err != nil {
 			msg = fmt.Sprintf("unable to get points: %s", err)
 			sendWarnMessage(b.ses, b.chid, msg)
 			continue

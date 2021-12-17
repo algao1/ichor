@@ -106,7 +106,7 @@ func plotLowHighLines(min, max float64, p *plot.Plot) error {
 	return nil
 }
 
-func PlotRecentAndPreds(min, max float64, pts []*store.TimePoint, preds []*store.TimePoint) (io.Reader, error) {
+func PlotRecentAndPreds(min, max float64, pts []store.TimePoint, preds []store.TimePoint) (io.Reader, error) {
 	if len(pts) == 0 {
 		return nil, fmt.Errorf("no points given")
 	}
@@ -152,7 +152,7 @@ func PlotRecentAndPreds(min, max float64, pts []*store.TimePoint, preds []*store
 	return buf, nil
 }
 
-func PlotOverlayWeekly(min, max float64, pts []*store.TimePoint) (io.Reader, error) {
+func PlotOverlayWeekly(min, max float64, pts []store.TimePoint) (io.Reader, error) {
 	if len(pts) == 0 {
 		return nil, fmt.Errorf("no points given")
 	}

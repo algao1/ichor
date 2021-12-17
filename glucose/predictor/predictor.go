@@ -20,7 +20,7 @@ func New(conn *grpc.ClientConn) *Client {
 	}
 }
 
-func (c *Client) Predict(ctx context.Context, pts []*store.TimePoint) (*store.TimePoint, error) {
+func (c *Client) Predict(ctx context.Context, pts []store.TimePoint) (*store.TimePoint, error) {
 	if len(pts) == 0 {
 		return nil, fmt.Errorf("no points given")
 	}

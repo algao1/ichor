@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"time"
 
 	"github.com/boltdb/bolt"
@@ -49,7 +50,7 @@ func (s *Store) Initialize() error {
 
 // AddPoint adds a singular TimePoint under a field.
 // Returns an error if the field does not exist.
-func (s *Store) AddPoint(field string, pt *TimePoint) error {
+func (s *Store) AddPoint(field string, t time.Time, pt interface{}) error {
 	return s.DB.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(field))
 		if b == nil {
@@ -61,16 +62,17 @@ func (s *Store) AddPoint(field string, pt *TimePoint) error {
 			return err
 		}
 
-		return b.Put(timeToBytes(pt.Time), encoded)
+		return b.Put(timeToBytes(t), encoded)
 	})
 }
 
 // GetPoints retrieves a series of TimePoints for a given field,
 // between two dates. Returns an error if the field does not exist.
-func (s *Store) GetPoints(start, end time.Time, field string) ([]*TimePoint, error) {
-	pts := make([]*TimePoint, 0)
+func (s *Store) GetPoints(start, end time.Time, field string, ptsPtr interface{}) error {
 	min := timeToBytes(start)
 	max := timeToBytes(end)
+
+	values := make([][]byte, 0)
 
 	err := s.DB.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(field))
@@ -80,27 +82,42 @@ func (s *Store) GetPoints(start, end time.Time, field string) ([]*TimePoint, err
 
 		c := b.Cursor()
 		for k, v := c.Seek(min); k != nil && bytes.Compare(k, max) <= 0; k, v = c.Next() {
-			var pt TimePoint
-
-			err := json.Unmarshal(v, &pt)
-			if err != nil {
-				return err
-			}
-
-			pts = append(pts, &pt)
+			values = append(values, v)
 		}
 
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	return pts, nil
+	// Reflection weirdness below.
+
+	if reflect.TypeOf(ptsPtr).Kind() != reflect.Ptr {
+		return fmt.Errorf("expected pointer, but got: %v", reflect.TypeOf(ptsPtr).Kind())
+	}
+	slice := reflect.ValueOf(ptsPtr).Elem()
+
+	if reflect.ValueOf(ptsPtr).Elem().Kind() != reflect.Slice {
+		return fmt.Errorf("expected slice, but got: %v", reflect.ValueOf(ptsPtr).Elem().Kind())
+	}
+	etype := reflect.TypeOf(ptsPtr).Elem().Elem()
+
+	for _, v := range values {
+		eint := reflect.New(etype).Interface()
+		err := json.Unmarshal(v, &eint)
+		if err != nil {
+			return err
+		}
+		elem := reflect.ValueOf(eint).Elem()
+		slice.Set(reflect.Append(slice, elem))
+	}
+
+	return nil
 }
 
-func (s *Store) GetLastPoints(field string, last int) ([]*TimePoint, error) {
-	pts := make([]*TimePoint, 0)
+func (s *Store) GetLastPoints(field string, last int, ptsPtr interface{}) error {
+	values := make([][]byte, 0)
 
 	err := s.DB.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(field))
@@ -110,25 +127,38 @@ func (s *Store) GetLastPoints(field string, last int) ([]*TimePoint, error) {
 
 		c := b.Cursor()
 		for k, v := c.Last(); k != nil && last > 0; k, v = c.Prev() {
-			var pt TimePoint
-
-			err := json.Unmarshal(v, &pt)
-			if err != nil {
-				return err
-			}
-
-			pts = append(pts, &pt)
-
+			values = append(values, v)
 			last--
 		}
-
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	return pts, nil
+	// Reflection weirdness below.
+
+	if reflect.TypeOf(ptsPtr).Kind() != reflect.Ptr {
+		return fmt.Errorf("expected pointer, but got: %v", reflect.TypeOf(ptsPtr).Kind())
+	}
+	slice := reflect.ValueOf(ptsPtr).Elem()
+
+	if reflect.ValueOf(ptsPtr).Elem().Kind() != reflect.Slice {
+		return fmt.Errorf("expected slice, but got: %v", reflect.ValueOf(ptsPtr).Elem().Kind())
+	}
+	etype := reflect.TypeOf(ptsPtr).Elem().Elem()
+
+	for _, v := range values {
+		eint := reflect.New(etype).Interface()
+		err := json.Unmarshal(v, &eint)
+		if err != nil {
+			return err
+		}
+		elem := reflect.ValueOf(eint).Elem()
+		slice.Set(reflect.Append(slice, elem))
+	}
+
+	return nil
 }
 
 func (s *Store) AddObject(index string, obj interface{}) error {

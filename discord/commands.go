@@ -88,7 +88,7 @@ func interactionCreate(ses *session.Session, sto *store.Store) func(e *gateway.I
 				gr, err := glucoseReport(sto)
 				if err != nil {
 					resp = interactionWarnResponse(err.Error())
-					return
+					break
 				}
 
 				resp = api.InteractionResponse{
@@ -112,13 +112,13 @@ func interactionCreate(ses *session.Session, sto *store.Store) func(e *gateway.I
 				n, err := data.Options[0].IntValue()
 				if err != nil {
 					resp = interactionWarnResponse(err.Error())
-					return
+					break
 				}
 
 				wr, err := weeklyReport(int(n), sto)
 				if err != nil {
 					resp = interactionWarnResponse(err.Error())
-					return
+					break
 				}
 
 				resp = api.InteractionResponse{
@@ -142,7 +142,8 @@ func interactionCreate(ses *session.Session, sto *store.Store) func(e *gateway.I
 }
 
 func glucoseReport(sto *store.Store) (*GlucoseReport, error) {
-	pts, err := sto.GetPoints(time.Now().Add(-12*time.Hour), time.Now(), store.FieldGlucose)
+	var pts []store.TimePoint
+	err := sto.GetPoints(time.Now().Add(-12*time.Hour), time.Now(), store.FieldGlucose, &pts)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get points: %w", err)
 	}
@@ -179,7 +180,8 @@ func weeklyReport(offset int, sto *store.Store) (*WeeklyReport, error) {
 	t := time.Now().In(loc).AddDate(0, 0, -7*offset)
 	ws := weekStart(t)
 
-	pts, err := sto.GetPoints(ws, ws.AddDate(0, 0, 7), store.FieldGlucose)
+	var pts []store.TimePoint
+	err := sto.GetPoints(ws, ws.AddDate(0, 0, 7), store.FieldGlucose, &pts)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get points: %w", err)
 	}
