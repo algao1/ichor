@@ -3,14 +3,31 @@ package discord
 import (
 	"context"
 	"fmt"
-	"log"
-	"strings"
 
 	"github.com/algao1/ichor/store"
+	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/gateway"
 	"github.com/diamondburned/arikawa/v3/session"
 )
+
+var registeredCommands = []api.CreateCommandData{
+	{
+		Name:        "glucose",
+		Description: "Get the current glucose value.",
+	},
+	{
+		Name:        "weekly",
+		Description: "Get the weekly overlay of glucose values.",
+		Options: discord.CommandOptions{
+			&discord.IntegerOption{
+				OptionName:  "offset",
+				Description: "Weekly offset.",
+				Required:    true,
+			},
+		},
+	},
+}
 
 type Bot struct {
 	ses    *session.Session
@@ -44,7 +61,7 @@ func Create(token string, uid float64, sto *store.Store, alertCh <-chan Alert) (
 
 	// Add handlers.
 	ses.AddIntents(gateway.IntentDirectMessages)
-	ses.AddHandler(b.makeMessageCreate())
+	ses.AddHandler(interactionCreate(b.ses, b.sto))
 
 	if alertCh != nil {
 		go b.handleAlerts()
@@ -53,8 +70,37 @@ func Create(token string, uid float64, sto *store.Store, alertCh <-chan Alert) (
 	return b, nil
 }
 
-func (b *Bot) Run() error {
-	return b.ses.Open(context.Background())
+func (b *Bot) Run(ctx context.Context) error {
+	err := b.ses.Open(ctx)
+	if err != nil {
+		return err
+	}
+
+	app, err := b.ses.CurrentApplication()
+	if err != nil {
+		return err
+	}
+	appID := app.ID
+
+	commands, err := b.ses.Commands(appID)
+	if err != nil {
+		return err
+	}
+
+	// Delete old commands.
+	for _, command := range commands {
+		b.ses.DeleteCommand(appID, command.ID)
+	}
+
+	// Add registered commands.
+	for _, command := range registeredCommands {
+		_, err := b.ses.CreateCommand(appID, command)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (b *Bot) Stop() error {
@@ -100,29 +146,5 @@ func (b *Bot) handleAlerts() {
 			Description: msg,
 			Color:       discord.Color(WarnLevel5),
 		})
-	}
-}
-
-func (b *Bot) makeMessageCreate() func(c *gateway.MessageCreateEvent) {
-	return func(c *gateway.MessageCreateEvent) {
-		m, err := b.ses.Message(b.chid, c.ID)
-		if err != nil {
-			log.Println("Message not found:", c.ID)
-		}
-
-		if m.Author.ID != b.uid {
-			return
-		}
-
-		parsed := strings.Fields(m.Content)
-		cmd := parsed[0]
-
-		switch cmd {
-		case "!glucose":
-			b.cmdSendGlucoseData(parsed[1:])
-		case "!weekly":
-			b.cmdSendWeeklyReport(parsed[1:])
-		default:
-		}
 	}
 }

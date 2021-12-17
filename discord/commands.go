@@ -3,12 +3,13 @@ package discord
 import (
 	"encoding/json"
 	"fmt"
-	"strconv"
+	"log"
 	"time"
 
 	"github.com/algao1/ichor/store"
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/diamondburned/arikawa/v3/gateway"
 	"github.com/diamondburned/arikawa/v3/session"
 	"github.com/diamondburned/arikawa/v3/utils/sendpart"
 	"gonum.org/v1/gonum/stat"
@@ -22,6 +23,18 @@ const (
 	WarnLevel5 = 13382400 // #cc3300
 )
 
+type GlucoseReport struct {
+	Value float64
+	Trend store.Trend
+	Mean  float64
+	Std   float64
+	Chart sendpart.File
+}
+
+type WeeklyReport struct {
+	Chart sendpart.File
+}
+
 func sendWarnMessage(ses *session.Session, cid discord.ChannelID, desc string) {
 	ses.SendMessageComplex(cid, api.SendMessageData{
 		Embeds: []discord.Embed{{
@@ -32,14 +45,89 @@ func sendWarnMessage(ses *session.Session, cid discord.ChannelID, desc string) {
 	})
 }
 
-func (b *Bot) cmdSendGlucoseData(args []string) {
-	var msg string
+func interactionWarnResponse(desc string) api.InteractionResponse {
+	return api.InteractionResponse{
+		Type: api.MessageInteractionWithSource,
+		Data: &api.InteractionResponseData{
+			Embeds: &[]discord.Embed{{
+				Title:       "Warning",
+				Description: desc,
+				Color:       discord.Color(WarnLevel3),
+			}},
+		},
+	}
+}
 
-	pts, err := b.sto.GetPoints(time.Now().Add(-12*time.Hour), time.Now(), store.FieldGlucose)
+func interactionCreate(ses *session.Session, sto *store.Store) func(e *gateway.InteractionCreateEvent) {
+	return func(e *gateway.InteractionCreateEvent) {
+		var resp api.InteractionResponse
+
+		// This is slightly ugly.
+
+		switch data := e.Data.(type) {
+		case *discord.CommandInteraction:
+			switch data.Name {
+			case "glucose":
+				gr, err := glucoseReport(sto)
+				if err != nil {
+					resp = interactionWarnResponse(err.Error())
+					return
+				}
+
+				resp = api.InteractionResponse{
+					Type: api.MessageInteractionWithSource,
+					Data: &api.InteractionResponseData{
+						Embeds: &[]discord.Embed{{
+							Title: "Recent Glucose & Predictions",
+							Image: &discord.EmbedImage{URL: "attachment://" + gr.Chart.Name},
+							Fields: []discord.EmbedField{
+								{Name: "Current", Value: floatToString(gr.Value)},
+								{Name: "Trend", Value: "\\" + trendToString(gr.Trend)},
+								{Name: "Mean", Value: floatToString(gr.Mean)},
+								{Name: "Std", Value: floatToString(gr.Std)},
+							},
+							Color: discord.Color(WarnLevel1),
+						}},
+						Files: []sendpart.File{gr.Chart},
+					},
+				}
+			case "weekly":
+				n, err := data.Options[0].IntValue()
+				if err != nil {
+					resp = interactionWarnResponse(err.Error())
+					return
+				}
+
+				wr, err := weeklyReport(int(n), sto)
+				if err != nil {
+					resp = interactionWarnResponse(err.Error())
+					return
+				}
+
+				resp = api.InteractionResponse{
+					Type: api.MessageInteractionWithSource,
+					Data: &api.InteractionResponseData{
+						Embeds: &[]discord.Embed{{
+							Title: "Weekly Overlay",
+							Image: &discord.EmbedImage{URL: "attachment://" + wr.Chart.Name},
+							Color: discord.Color(WarnLevel1),
+						}},
+						Files: []sendpart.File{wr.Chart},
+					},
+				}
+			}
+		}
+
+		if err := ses.RespondInteraction(e.ID, e.Token, resp); err != nil {
+			log.Println("failed to send interaction callback: ", err)
+		}
+	}
+}
+
+func glucoseReport(sto *store.Store) (*GlucoseReport, error) {
+	pts, err := sto.GetPoints(time.Now().Add(-12*time.Hour), time.Now(), store.FieldGlucose)
 	if err != nil {
-		msg = fmt.Sprintf("unable to get points: %s", err)
-		sendWarnMessage(b.ses, b.chid, msg)
-		return
+		return nil, fmt.Errorf("unable to get points: %w", err)
 	}
 
 	x := make([]float64, len(pts))
@@ -47,97 +135,59 @@ func (b *Bot) cmdSendGlucoseData(args []string) {
 		x[i] = pt.Value
 	}
 
-	confObj, err := b.sto.GetObject(store.IndexConfig)
+	confObj, err := sto.GetObject(store.IndexConfig)
 	if err != nil {
-		msg = fmt.Sprintf("unable to load config: %s", err)
-		sendWarnMessage(b.ses, b.chid, msg)
-		return
+		return nil, fmt.Errorf("unable to load config: %w", err)
 	}
 
 	var conf store.Config
-	json.Unmarshal(confObj, &conf)
+	if err = json.Unmarshal(confObj, &conf); err != nil {
+		return nil, fmt.Errorf("unable to unmarshal config: %w", err)
+	}
 
 	r, err := PlotRecentAndPreds(conf.LowThreshold, conf.HighThreshold, pts, nil)
 	if err != nil {
-		msg = fmt.Sprintf("unable to generate graph: %s", err)
-		sendWarnMessage(b.ses, b.chid, msg)
-		return
+		return nil, fmt.Errorf("unable to generate daily graph: %w", err)
 	}
 
 	curPt := pts[len(pts)-1]
-
 	mean := stat.Mean(x, nil)
 	std := stat.StdDev(x, nil)
 
-	img := sendpart.File{Name: "recentAndPreds.png", Reader: r}
-
-	b.ses.SendMessageComplex(b.chid, api.SendMessageData{
-		Embeds: []discord.Embed{{
-			Title: "Recent Glucose & Predictions",
-			Image: &discord.EmbedImage{URL: "attachment://" + img.Name},
-			Fields: []discord.EmbedField{
-				{Name: "Current", Value: floatToString(curPt.Value)},
-				{Name: "Trend", Value: "\\" + trendToString(curPt.Trend)},
-				{Name: "Mean", Value: floatToString(mean)},
-				{Name: "Standard Deviation", Value: floatToString(std)},
-			},
-			Color: discord.Color(WarnLevel1),
-		}},
-		Files: []sendpart.File{img},
-	})
+	return &GlucoseReport{
+		Value: curPt.Value,
+		Trend: curPt.Trend,
+		Mean:  mean,
+		Std:   std,
+		Chart: sendpart.File{Name: "glucoseChart.png", Reader: r},
+	}, nil
 }
 
-func (b *Bot) cmdSendWeeklyReport(args []string) {
-	var msg string
-
-	if len(args) != 1 {
-		msg = fmt.Sprintf("need %d args but got %d: %s", 1, len(args), GlucoseWeeklyUsage)
-		sendWarnMessage(b.ses, b.chid, msg)
-		return
-	}
-
-	n, err := strconv.Atoi(args[0])
-	if err != nil {
-		msg = fmt.Sprintf("not a number %s: %s", args[0], GlucoseWeeklyUsage)
-		sendWarnMessage(b.ses, b.chid, msg)
-		return
-	}
-
-	t := time.Now().In(loc).AddDate(0, 0, -7*n)
+func weeklyReport(offset int, sto *store.Store) (*WeeklyReport, error) {
+	t := time.Now().In(loc).AddDate(0, 0, -7*offset)
 	ws := weekStart(t)
 
-	pts, err := b.sto.GetPoints(ws, ws.AddDate(0, 0, 7), store.FieldGlucose)
+	pts, err := sto.GetPoints(ws, ws.AddDate(0, 0, 7), store.FieldGlucose)
 	if err != nil {
-		msg = fmt.Sprintf("unable to get points: %s", err)
-		sendWarnMessage(b.ses, b.chid, msg)
-		return
+		return nil, fmt.Errorf("unable to get points: %w", err)
 	}
 
-	confObj, err := b.sto.GetObject(store.IndexConfig)
+	confObj, err := sto.GetObject(store.IndexConfig)
 	if err != nil {
-		msg = fmt.Sprintf("unable to load config: %s", err)
-		sendWarnMessage(b.ses, b.chid, msg)
-		return
+		return nil, fmt.Errorf("unable to load config: %w", err)
 	}
 
 	var conf store.Config
-	json.Unmarshal(confObj, &conf)
+	if err = json.Unmarshal(confObj, &conf); err != nil {
+		return nil, fmt.Errorf("unable to unmarshal config: %w", err)
+	}
 
 	r, err := PlotOverlayWeekly(conf.LowThreshold, conf.HighThreshold, pts)
 	if err != nil {
-		msg = fmt.Sprintf("unable to generate weekly plot: %s", err)
-		sendWarnMessage(b.ses, b.chid, msg)
-		return
+		return nil, fmt.Errorf("unable to generate weekly plot: %w", err)
 	}
 
-	img := sendpart.File{Name: "weeklyOverlay.png", Reader: r}
-
-	b.ses.SendMessageComplex(b.chid, api.SendMessageData{
-		Embeds: []discord.Embed{{
-			Title: "Weekly Overlay",
-			Image: &discord.EmbedImage{URL: "attachment://" + img.Name},
-			Color: discord.Color(WarnLevel1),
-		}},
-		Files: []sendpart.File{img},
-	})
+	return &WeeklyReport{
+		Chart: sendpart.File{Name: "weeklyOverlay.png", Reader: r},
+	}, nil
 }

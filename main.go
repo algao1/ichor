@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"log"
 	"os"
@@ -71,7 +72,7 @@ func main() {
 	p := predictor.New(conn)
 	go RunPredictor(p, s, alertCh)
 
-	db.Run()
+	db.Run(context.Background())
 	defer db.Stop()
 
 	sc := make(chan os.Signal, 1)
