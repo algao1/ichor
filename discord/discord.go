@@ -5,29 +5,10 @@ import (
 	"fmt"
 
 	"github.com/algao1/ichor/store"
-	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/gateway"
 	"github.com/diamondburned/arikawa/v3/session"
 )
-
-var registeredCommands = []api.CreateCommandData{
-	{
-		Name:        "glucose",
-		Description: "Get the current glucose value.",
-	},
-	{
-		Name:        "weekly",
-		Description: "Get the weekly overlay of glucose values.",
-		Options: discord.CommandOptions{
-			&discord.IntegerOption{
-				OptionName:  "offset",
-				Description: "Weekly offset.",
-				Required:    true,
-			},
-		},
-	},
-}
 
 type Bot struct {
 	ses    *session.Session

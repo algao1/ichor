@@ -8,7 +8,7 @@ const (
 	FieldObject      = "obj"
 
 	IndexConfig        = "config"
-	IndexTimeoutExpore = "timeout-expire"
+	IndexTimeoutExpire = "timeout-expire"
 )
 
 type Trend int

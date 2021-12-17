@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"time"
@@ -67,23 +66,13 @@ func RunPredictor(client *predictor.Client, s *store.Store, alertCh chan<- disco
 		// Everything below here is very not production ready.
 		// TODO: Fix everything.
 
-		confObj, err := s.GetObject(store.IndexConfig)
-		if err != nil {
-			log.Printf("Could not access config settings")
-			continue
-		}
-
 		var conf store.Config
-		err = json.Unmarshal(confObj, &conf)
-		if err != nil {
-			panic("Invalid configuration")
+		if err = s.GetObject(store.IndexConfig, &conf); err != nil {
+			panic(fmt.Errorf("unable to load config: %w", err))
 		}
 
 		var expire time.Time
-		expireObj, err := s.GetObject(store.IndexTimeoutExpore)
-		if err == nil {
-			json.Unmarshal(expireObj, &expire)
-		}
+		s.GetObject(store.IndexTimeoutExpire, &expire)
 
 		if expire.After(time.Now()) {
 			continue
@@ -91,10 +80,10 @@ func RunPredictor(client *predictor.Client, s *store.Store, alertCh chan<- disco
 
 		if ftp.Value <= conf.LowThreshold {
 			alertCh <- discord.Low
-			s.AddObject(store.IndexTimeoutExpore, time.Now().Add(conf.WarningTimeout))
+			s.AddObject(store.IndexTimeoutExpire, time.Now().Add(conf.WarningTimeout))
 		} else if ftp.Value >= conf.HighThreshold {
 			alertCh <- discord.High
-			s.AddObject(store.IndexTimeoutExpore, time.Now().Add(conf.WarningTimeout))
+			s.AddObject(store.IndexTimeoutExpire, time.Now().Add(conf.WarningTimeout))
 		}
 	}
 }

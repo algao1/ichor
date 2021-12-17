@@ -1,7 +1,6 @@
 package discord
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"time"
@@ -22,6 +21,24 @@ const (
 	WarnLevel4 = 16750950 // #ff9966
 	WarnLevel5 = 13382400 // #cc3300
 )
+
+var registeredCommands = []api.CreateCommandData{
+	{
+		Name:        "glucose",
+		Description: "Get the current glucose value.",
+	},
+	{
+		Name:        "weekly",
+		Description: "Get the weekly overlay of glucose values.",
+		Options: discord.CommandOptions{
+			&discord.IntegerOption{
+				OptionName:  "offset",
+				Description: "Weekly offset.",
+				Required:    true,
+			},
+		},
+	},
+}
 
 type GlucoseReport struct {
 	Value float64
@@ -135,14 +152,9 @@ func glucoseReport(sto *store.Store) (*GlucoseReport, error) {
 		x[i] = pt.Value
 	}
 
-	confObj, err := sto.GetObject(store.IndexConfig)
-	if err != nil {
-		return nil, fmt.Errorf("unable to load config: %w", err)
-	}
-
 	var conf store.Config
-	if err = json.Unmarshal(confObj, &conf); err != nil {
-		return nil, fmt.Errorf("unable to unmarshal config: %w", err)
+	if err = sto.GetObject(store.IndexConfig, &conf); err != nil {
+		return nil, fmt.Errorf("unable to load config: %w", err)
 	}
 
 	r, err := PlotRecentAndPreds(conf.LowThreshold, conf.HighThreshold, pts, nil)
@@ -172,14 +184,9 @@ func weeklyReport(offset int, sto *store.Store) (*WeeklyReport, error) {
 		return nil, fmt.Errorf("unable to get points: %w", err)
 	}
 
-	confObj, err := sto.GetObject(store.IndexConfig)
-	if err != nil {
-		return nil, fmt.Errorf("unable to load config: %w", err)
-	}
-
 	var conf store.Config
-	if err = json.Unmarshal(confObj, &conf); err != nil {
-		return nil, fmt.Errorf("unable to unmarshal config: %w", err)
+	if err = sto.GetObject(store.IndexConfig, &conf); err != nil {
+		return nil, fmt.Errorf("unable to load config: %w", err)
 	}
 
 	r, err := PlotOverlayWeekly(conf.LowThreshold, conf.HighThreshold, pts)

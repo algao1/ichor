@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"math"
 	"time"
 
 	"github.com/boltdb/bolt"
@@ -148,41 +147,34 @@ func (s *Store) AddObject(index string, obj interface{}) error {
 	})
 }
 
-func (s *Store) GetObject(index string) ([]byte, error) {
-	var obj []byte
-
+func (s *Store) GetObject(index string, obj interface{}) error {
+	var found []byte
 	err := s.DB.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(FieldObject))
 		if b == nil {
 			return fmt.Errorf("unable to find bucket: %s", FieldObject)
 		}
 
-		obj = b.Get([]byte(index))
-		if obj == nil {
+		found = b.Get([]byte(index))
+		if found == nil {
 			return fmt.Errorf("unable to find key: %s", index)
 		}
 
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	return obj, nil
+	if err = json.Unmarshal(found, &obj); err != nil {
+		return fmt.Errorf("unable to unmarshal object: %w", err)
+	}
+
+	return nil
 }
 
 func timeToBytes(t time.Time) []byte {
 	var buf [8]byte
 	binary.BigEndian.PutUint64(buf[:], uint64(t.Unix()))
 	return buf[:]
-}
-
-func bytesToTime(b []byte) time.Time {
-	unsigned := binary.BigEndian.Uint64(b)
-	return time.Unix(int64(unsigned), 0)
-}
-
-func bytesToFloat64(b []byte) float64 {
-	bits := binary.BigEndian.Uint64(b)
-	return math.Float64frombits(bits)
 }
