@@ -163,10 +163,10 @@ func PlotOverlayWeekly(min, max float64, pts []*store.TimePoint) (io.Reader, err
 		return nil, fmt.Errorf("points must be within a week")
 	}
 
-	var dotted bool
-	if end.Local().Month() == time.Now().Local().Month() &&
-		end.Local().Day() == time.Now().Day() {
-		dotted = true
+	dotted := true
+	if end.In(loc).Month() == time.Now().In(loc).Month() &&
+		end.In(loc).Day() == time.Now().In(loc).Day() {
+		dotted = false
 	}
 
 	p := plot.New()
