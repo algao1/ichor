@@ -17,9 +17,6 @@ const (
 var loc, _ = time.LoadLocation("Canada/Eastern")
 
 const (
-	GlucoseDataUsage   = "!glucose"
-	GlucoseWeeklyUsage = "!weekly [+/-]#"
-
 	TimeFormat = "2006-01-02 03:04 PM"
 	HourFormat = "3 PM"
 )

@@ -6,6 +6,7 @@ const (
 	FieldGlucose      = "glucose"
 	FieldGlucosePred  = "glucose-pred"
 	FieldCarbohydrate = "carbohydrate"
+	FieldInsulin      = "insulin"
 	FieldObject       = "obj"
 
 	IndexConfig        = "config"
@@ -33,6 +34,12 @@ type TimePoint struct {
 
 type Carbohydrate struct {
 	Time  time.Time
+	Value int
+}
+
+type Insulin struct {
+	Time  time.Time
+	Type  string
 	Value int
 }
 

@@ -11,9 +11,6 @@ import (
 	"github.com/boltdb/bolt"
 )
 
-// See https://itnext.io/storing-time-series-in-rocksdb-a-cookbook-e873fcb117e4
-// for inspiration.
-
 type Store struct {
 	DB *bolt.DB
 }
@@ -27,6 +24,8 @@ func Create() (*Store, error) {
 }
 
 // Initialize stands up the necessary buckets for future transactions.
+// TODO: This requires an overhaul, manually configuring bucket creation
+//			 is a bit of a hassle.
 func (s *Store) Initialize() error {
 	return s.DB.Update(func(tx *bolt.Tx) error {
 		_, err := tx.CreateBucketIfNotExists([]byte(FieldGlucose))
@@ -40,6 +39,11 @@ func (s *Store) Initialize() error {
 		}
 
 		_, err = tx.CreateBucketIfNotExists([]byte(FieldCarbohydrate))
+		if err != nil {
+			return fmt.Errorf("unable to create bucket: %w", err)
+		}
+
+		_, err = tx.CreateBucketIfNotExists([]byte(FieldInsulin))
 		if err != nil {
 			return fmt.Errorf("unable to create bucket: %w", err)
 		}

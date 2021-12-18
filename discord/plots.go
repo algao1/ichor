@@ -19,7 +19,10 @@ import (
 
 var warnColour, _ = colorful.Hex("#484a47")
 
-var carbColour, _ = colorful.Hex("#21897e")
+var (
+	carbColour, _    = colorful.Hex("#21897e")
+	insulinColour, _ = colorful.Hex("#8980f5")
+)
 
 var (
 	MondayColour, _    = colorful.Hex("#517AB8")
@@ -88,6 +91,21 @@ func (t RecentTicks) Ticks(min, max float64) []plot.Tick {
 	return ticks
 }
 
+type InvertPyramidGlyph struct{}
+
+func (InvertPyramidGlyph) DrawGlyph(c *draw.Canvas, sty draw.GlyphStyle, pt vg.Point) {
+	sinπover6 := font.Length(math.Sin(math.Pi / 6))
+	cosπover6 := font.Length(math.Cos(math.Pi / 6))
+
+	r := sty.Radius + (sty.Radius-sty.Radius*sinπover6)/2
+	p := make(vg.Path, 0, 4)
+	p.Move(vg.Point{X: pt.X, Y: pt.Y - r})
+	p.Line(vg.Point{X: pt.X - r*cosπover6, Y: pt.Y + r*sinπover6})
+	p.Line(vg.Point{X: pt.X + r*cosπover6, Y: pt.Y + r*sinπover6})
+	p.Close()
+	c.Fill(p)
+}
+
 func plotLowHighLines(min, max float64, p *plot.Plot) error {
 	tl, err := plotter.NewLine(plotter.XYs{plotter.XY{X: p.X.Min, Y: max}, plotter.XY{X: p.X.Max, Y: max}})
 	if err != nil {
@@ -109,6 +127,10 @@ func plotLowHighLines(min, max float64, p *plot.Plot) error {
 
 	return nil
 }
+
+// TODO: Generalize plotCarbohydrates and plotInsulin better to avoid
+//			 redundant code and to support predictions.
+// TODO: Also need to account for stacking values (which is rare).
 
 func plotCarbohydrates(yrange float64, xys plotter.XYs, carbs []store.Carbohydrate, p *plot.Plot) error {
 	offset := yrange / 20
@@ -137,8 +159,35 @@ func plotCarbohydrates(yrange float64, xys plotter.XYs, carbs []store.Carbohydra
 	return nil
 }
 
+func plotInsulin(yrange float64, xys plotter.XYs, insulin []store.Insulin, p *plot.Plot) error {
+	offset := yrange / 20
+	dosexys := make(plotter.XYs, 0)
+	c := 0
+
+	for _, dose := range insulin {
+		dosex := float64(dose.Time.Unix())
+		for c < len(xys)-1 && math.Abs(xys[c].X-dosex) > 300 {
+			c++
+		}
+		dosexys = append(dosexys, plotter.XY{X: dosex, Y: xys[c].Y + offset})
+	}
+
+	ds, err := plotter.NewScatter(dosexys)
+	if err != nil {
+		return err
+	}
+	ds.GlyphStyle.Color = insulinColour
+	ds.GlyphStyle.Shape = InvertPyramidGlyph{}
+	ds.GlyphStyle.Radius = 0.2 * font.Centimeter
+
+	p.Add(ds)
+	p.Legend.Add("Insulin", ds)
+
+	return nil
+}
+
 func PlotRecentAndPreds(min, max float64, pts []store.TimePoint, preds []store.TimePoint,
-	carbs []store.Carbohydrate) (io.Reader, error) {
+	carbs []store.Carbohydrate, insulin []store.Insulin) (io.Reader, error) {
 	if len(pts) == 0 {
 		return nil, fmt.Errorf("no points given")
 	}
@@ -169,9 +218,13 @@ func PlotRecentAndPreds(min, max float64, pts []store.TimePoint, preds []store.T
 	p.Add(l)
 	p.Legend.Add("Observed", l)
 
-	// Plot predictions here...
+	// TODO: Plot predictions here...
 
 	if err = plotCarbohydrates(maxSoFar-minSoFar, xys, carbs, p); err != nil {
+		return nil, err
+	}
+
+	if err = plotInsulin(maxSoFar-minSoFar, xys, insulin, p); err != nil {
 		return nil, err
 	}
 
