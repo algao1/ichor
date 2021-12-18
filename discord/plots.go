@@ -11,11 +11,15 @@ import (
 	"github.com/algao1/ichor/store"
 	"github.com/lucasb-eyer/go-colorful"
 	"gonum.org/v1/plot"
+	"gonum.org/v1/plot/font"
 	"gonum.org/v1/plot/plotter"
 	"gonum.org/v1/plot/vg"
+	"gonum.org/v1/plot/vg/draw"
 )
 
 var warnColour, _ = colorful.Hex("#484a47")
+
+var carbColour, _ = colorful.Hex("#21897e")
 
 var (
 	MondayColour, _    = colorful.Hex("#517AB8")
@@ -106,7 +110,35 @@ func plotLowHighLines(min, max float64, p *plot.Plot) error {
 	return nil
 }
 
-func PlotRecentAndPreds(min, max float64, pts []store.TimePoint, preds []store.TimePoint) (io.Reader, error) {
+func plotCarbohydrates(yrange float64, xys plotter.XYs, carbs []store.Carbohydrate, p *plot.Plot) error {
+	offset := yrange / 20
+	carbxys := make(plotter.XYs, 0)
+	c := 0
+
+	for _, carb := range carbs {
+		carbx := float64(carb.Time.Unix())
+		for c < len(xys)-1 && math.Abs(xys[c].X-carbx) > 300 {
+			c++
+		}
+		carbxys = append(carbxys, plotter.XY{X: carbx, Y: xys[c].Y - offset})
+	}
+
+	cs, err := plotter.NewScatter(carbxys)
+	if err != nil {
+		return err
+	}
+	cs.GlyphStyle.Color = carbColour
+	cs.GlyphStyle.Shape = draw.PyramidGlyph{}
+	cs.GlyphStyle.Radius = 0.2 * font.Centimeter
+
+	p.Add(cs)
+	p.Legend.Add("Carbohydrates", cs)
+
+	return nil
+}
+
+func PlotRecentAndPreds(min, max float64, pts []store.TimePoint, preds []store.TimePoint,
+	carbs []store.Carbohydrate) (io.Reader, error) {
 	if len(pts) == 0 {
 		return nil, fmt.Errorf("no points given")
 	}
@@ -118,9 +150,15 @@ func PlotRecentAndPreds(min, max float64, pts []store.TimePoint, preds []store.T
 	p.X.Tick.Marker = RecentTicks{}
 
 	p.Y.Min = math.Max(0, min-1)
+	p.Y.Max = max + 1
+
+	minSoFar := min
+	maxSoFar := max
 
 	xys := make(plotter.XYs, len(pts))
 	for i, pt := range pts {
+		maxSoFar = math.Max(maxSoFar, pt.Value)
+		minSoFar = math.Min(minSoFar, pt.Value)
 		xys[i] = plotter.XY{X: float64(pt.Time.Unix()), Y: pt.Value}
 	}
 
@@ -133,8 +171,11 @@ func PlotRecentAndPreds(min, max float64, pts []store.TimePoint, preds []store.T
 
 	// Plot predictions here...
 
-	err = plotLowHighLines(min, max, p)
-	if err != nil {
+	if err = plotCarbohydrates(maxSoFar-minSoFar, xys, carbs, p); err != nil {
+		return nil, err
+	}
+
+	if err = plotLowHighLines(min, max, p); err != nil {
 		return nil, err
 	}
 

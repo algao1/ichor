@@ -10,6 +10,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/gateway"
 	"github.com/diamondburned/arikawa/v3/session"
+	"github.com/diamondburned/arikawa/v3/utils/json/option"
 	"github.com/diamondburned/arikawa/v3/utils/sendpart"
 	"gonum.org/v1/gonum/stat"
 )
@@ -34,6 +35,17 @@ var registeredCommands = []api.CreateCommandData{
 			&discord.IntegerOption{
 				OptionName:  "offset",
 				Description: "Weekly offset.",
+				Required:    true,
+			},
+		},
+	},
+	{
+		Name:        "carbohydrates",
+		Description: "Insert the estimated carbohydrate intake.",
+		Options: discord.CommandOptions{
+			&discord.IntegerOption{
+				OptionName:  "amount",
+				Description: "Amount of carbohydrates (grams).",
 				Required:    true,
 			},
 		},
@@ -132,6 +144,31 @@ func interactionCreate(ses *session.Session, sto *store.Store) func(e *gateway.I
 						Files: []sendpart.File{wr.Chart},
 					},
 				}
+			case "carbohydrates":
+				val, err := data.Options[0].IntValue()
+				if err != nil {
+					resp = interactionWarnResponse(err.Error())
+					break
+				}
+
+				now := time.Now().In(loc)
+				err = sto.AddPoint(store.FieldCarbohydrate, now, store.Carbohydrate{
+					Time:  now,
+					Value: int(val),
+				})
+				if err != nil {
+					resp = interactionWarnResponse(err.Error())
+					break
+				}
+
+				resp = api.InteractionResponse{
+					Type: api.MessageInteractionWithSource,
+					Data: &api.InteractionResponseData{
+						Content: option.NewNullableString(
+							fmt.Sprintf("Carbohydrate intake saved: %d", val),
+						),
+					},
+				}
 			}
 		}
 
@@ -142,10 +179,21 @@ func interactionCreate(ses *session.Session, sto *store.Store) func(e *gateway.I
 }
 
 func glucoseReport(sto *store.Store) (*GlucoseReport, error) {
+	start := time.Now().Add(-12 * time.Hour)
+	end := time.Now()
+
+	// Get glucose values.
 	var pts []store.TimePoint
-	err := sto.GetPoints(time.Now().Add(-12*time.Hour), time.Now(), store.FieldGlucose, &pts)
+	err := sto.GetPoints(start, end, store.FieldGlucose, &pts)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get points: %w", err)
+	}
+
+	// Get carbohydrate intakes.
+	var carbs []store.Carbohydrate
+	err = sto.GetPoints(start, end, store.FieldCarbohydrate, &carbs)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get carbohydrates: %w", err)
 	}
 
 	x := make([]float64, len(pts))
@@ -158,7 +206,7 @@ func glucoseReport(sto *store.Store) (*GlucoseReport, error) {
 		return nil, fmt.Errorf("unable to load config: %w", err)
 	}
 
-	r, err := PlotRecentAndPreds(conf.LowThreshold, conf.HighThreshold, pts, nil)
+	r, err := PlotRecentAndPreds(conf.LowThreshold, conf.HighThreshold, pts, nil, carbs)
 	if err != nil {
 		return nil, fmt.Errorf("unable to generate daily graph: %w", err)
 	}

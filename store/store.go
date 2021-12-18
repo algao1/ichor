@@ -39,6 +39,11 @@ func (s *Store) Initialize() error {
 			return fmt.Errorf("unable to create bucket: %w", err)
 		}
 
+		_, err = tx.CreateBucketIfNotExists([]byte(FieldCarbohydrate))
+		if err != nil {
+			return fmt.Errorf("unable to create bucket: %w", err)
+		}
+
 		_, err = tx.CreateBucketIfNotExists([]byte(FieldObject))
 		if err != nil {
 			return fmt.Errorf("unable to create bucket: %w", err)
@@ -134,6 +139,12 @@ func (s *Store) GetLastPoints(field string, last int, ptsPtr interface{}) error 
 	})
 	if err != nil {
 		return err
+	}
+
+	// Reverse the list so it goes from earliest -> latest.
+	// Generics would be a good use case for this.
+	for i, j := 0, len(values)-1; i < j; i, j = i+1, j-1 {
+		values[i], values[j] = values[j], values[i]
 	}
 
 	// Reflection weirdness below.

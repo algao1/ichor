@@ -3,9 +3,10 @@ package store
 import "time"
 
 const (
-	FieldGlucose     = "glucose"
-	FieldGlucosePred = "glucose-pred"
-	FieldObject      = "obj"
+	FieldGlucose      = "glucose"
+	FieldGlucosePred  = "glucose-pred"
+	FieldCarbohydrate = "carbohydrate"
+	FieldObject       = "obj"
 
 	IndexConfig        = "config"
 	IndexTimeoutExpire = "timeout-expire"
@@ -28,6 +29,11 @@ type TimePoint struct {
 	Time  time.Time
 	Value float64
 	Trend Trend
+}
+
+type Carbohydrate struct {
+	Time  time.Time
+	Value int
 }
 
 type Config struct {
