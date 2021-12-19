@@ -139,10 +139,16 @@ func plotCarbohydrates(yrange float64, xys plotter.XYs, carbs []store.Carbohydra
 
 	for _, carb := range carbs {
 		carbx := float64(carb.Time.Unix())
-		for c < len(xys)-1 && math.Abs(xys[c].X-carbx) > 300 {
+		for c < len(xys)-1 && carbx-xys[c].X > 0 {
 			c++
 		}
-		carbxys = append(carbxys, plotter.XY{X: carbx, Y: xys[c].Y - offset})
+
+		carby := xys[c].Y
+		if c < len(xys)-1 {
+			carby += (xys[c].Y - xys[c+1].Y) * (carbx - xys[c].X) / 300
+		}
+
+		carbxys = append(carbxys, plotter.XY{X: carbx, Y: carby - offset})
 	}
 
 	cs, err := plotter.NewScatter(carbxys)
@@ -166,9 +172,15 @@ func plotInsulin(yrange float64, xys plotter.XYs, insulin []store.Insulin, p *pl
 
 	for _, dose := range insulin {
 		dosex := float64(dose.Time.Unix())
-		for c < len(xys)-1 && math.Abs(xys[c].X-dosex) > 300 {
+		for c < len(xys)-1 && dosex-xys[c].X > 0 {
 			c++
 		}
+
+		dosey := xys[c].Y
+		if c < len(xys)-1 {
+			dosey += (xys[c].Y - xys[c+1].Y) * (dosex - xys[c].X) / 300
+		}
+
 		dosexys = append(dosexys, plotter.XY{X: dosex, Y: xys[c].Y + offset})
 	}
 
