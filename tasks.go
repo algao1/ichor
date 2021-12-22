@@ -55,11 +55,8 @@ func RunPredictor(client *predictor.Client, s *store.Store, alertCh chan<- disco
 			continue
 		}
 
-		fmt.Println(ftp.Time, ftp.Value)
-
-		ftime := ftp.Time.Add(24 * 5 * time.Minute)
-		s.AddPoint(store.FieldGlucosePred, ftime, &store.TimePoint{
-			Time:  ftime,
+		s.AddPoint(store.FieldGlucosePred, ftp.Time, &store.TimePoint{
+			Time:  ftp.Time,
 			Value: ftp.Value,
 			Trend: ftp.Trend,
 		})

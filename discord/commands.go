@@ -242,6 +242,13 @@ func glucoseReport(sto *store.Store) (*GlucoseReport, error) {
 		return nil, fmt.Errorf("unable to get points: %w", err)
 	}
 
+	// Get future glucose predictions.
+	var preds []store.TimePoint
+	err = sto.GetPoints(end, end.Add(3*time.Hour), store.FieldGlucosePred, &preds)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get predictions: %w", err)
+	}
+
 	// Get carbohydrate intakes.
 	var carbs []store.Carbohydrate
 	err = sto.GetPoints(start, end, store.FieldCarbohydrate, &carbs)
@@ -266,7 +273,7 @@ func glucoseReport(sto *store.Store) (*GlucoseReport, error) {
 		return nil, fmt.Errorf("unable to load config: %w", err)
 	}
 
-	r, err := PlotRecentAndPreds(conf.LowThreshold, conf.HighThreshold, pts, nil, carbs, insulin)
+	r, err := PlotRecentAndPreds(conf.LowThreshold, conf.HighThreshold, pts, preds, carbs, insulin)
 	if err != nil {
 		return nil, fmt.Errorf("unable to generate daily graph: %w", err)
 	}

@@ -227,10 +227,27 @@ func PlotRecentAndPreds(min, max float64, pts []store.TimePoint, preds []store.T
 	if err != nil {
 		return nil, err
 	}
+
 	p.Add(l)
 	p.Legend.Add("Observed", l)
 
-	// TODO: Plot predictions here...
+	predXYs := make(plotter.XYs, len(preds)+1)
+	for i, pred := range preds {
+		maxSoFar = math.Max(maxSoFar, pred.Value)
+		minSoFar = math.Min(minSoFar, pred.Value)
+
+		predXYs[i+1] = plotter.XY{X: float64(pred.Time.Unix()), Y: pred.Value}
+	}
+	predXYs[0] = xys[len(xys)-1]
+
+	pl, err := plotter.NewLine(predXYs)
+	if err != nil {
+		return nil, err
+	}
+	pl.LineStyle.Dashes = []vg.Length{vg.Points(3), vg.Points(3)}
+
+	p.Add(pl)
+	p.Legend.Add("Predicted", pl)
 
 	if err = plotCarbohydrates(maxSoFar-minSoFar, xys, carbs, p); err != nil {
 		return nil, err
