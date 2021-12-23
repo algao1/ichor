@@ -73,7 +73,7 @@ func (s *Store) Export(filepath string) error {
 		return err
 	}
 
-	var insulin []Carbohydrate
+	var insulin []Insulin
 	if err := s.GetPoints(time.Unix(0, 0), time.Now(), FieldInsulin, &insulin); err != nil {
 		return err
 	}
