@@ -5,10 +5,12 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"os"
 	"reflect"
 	"time"
 
 	"github.com/boltdb/bolt"
+	"github.com/gocarina/gocsv"
 )
 
 type Store struct {
@@ -28,33 +30,58 @@ func Create() (*Store, error) {
 //			 is a bit of a hassle.
 func (s *Store) Initialize() error {
 	return s.DB.Update(func(tx *bolt.Tx) error {
-		_, err := tx.CreateBucketIfNotExists([]byte(FieldGlucose))
-		if err != nil {
-			return fmt.Errorf("unable to create bucket: %w", err)
-		}
-
-		_, err = tx.CreateBucketIfNotExists([]byte(FieldGlucosePred))
-		if err != nil {
-			return fmt.Errorf("unable to create bucket: %w", err)
-		}
-
-		_, err = tx.CreateBucketIfNotExists([]byte(FieldCarbohydrate))
-		if err != nil {
-			return fmt.Errorf("unable to create bucket: %w", err)
-		}
-
-		_, err = tx.CreateBucketIfNotExists([]byte(FieldInsulin))
-		if err != nil {
-			return fmt.Errorf("unable to create bucket: %w", err)
-		}
-
-		_, err = tx.CreateBucketIfNotExists([]byte(FieldObject))
-		if err != nil {
-			return fmt.Errorf("unable to create bucket: %w", err)
+		for _, field := range Fields {
+			_, err := tx.CreateBucketIfNotExists([]byte(field))
+			if err != nil {
+				return fmt.Errorf("unable to create bucket: %w", err)
+			}
 		}
 
 		return nil
 	})
+}
+
+func (s *Store) exportSingle(filename string, in interface{}) error {
+	file, err := os.OpenFile(fmt.Sprintf("%s.csv", filename), os.O_RDWR|os.O_CREATE, os.ModePerm)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	err = gocsv.MarshalFile(in, file)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *Store) Export(filepath string) error {
+	var gl []TimePoint
+	if err := s.GetPoints(time.Unix(0, 0), time.Now(), FieldGlucose, &gl); err != nil {
+		return err
+	}
+	if err := s.exportSingle(filepath+"/"+FieldGlucose, gl); err != nil {
+		return err
+	}
+
+	var carbs []Carbohydrate
+	if err := s.GetPoints(time.Unix(0, 0), time.Now(), FieldCarbohydrate, &carbs); err != nil {
+		return err
+	}
+	if err := s.exportSingle(filepath+"/"+FieldCarbohydrate, carbs); err != nil {
+		return err
+	}
+
+	var insulin []Carbohydrate
+	if err := s.GetPoints(time.Unix(0, 0), time.Now(), FieldInsulin, &insulin); err != nil {
+		return err
+	}
+	if err := s.exportSingle(filepath+"/"+FieldInsulin, insulin); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // AddPoint adds a singular TimePoint under a field.

@@ -23,9 +23,13 @@ var (
 	dexAccount  string
 	dexPassword string
 	serverAddr  string
+
+	export bool
 )
 
 func init() {
+	flag.BoolVar(&export, "e", false, "export db as csv")
+
 	flag.StringVar(&token, "t", "", "discord bot token")
 	flag.StringVar(&uid, "u", "", "discord user id")
 	flag.StringVar(&dexAccount, "a", "", "dexcom account")
@@ -41,6 +45,13 @@ func main() {
 		log.Fatal(err)
 	}
 	s.Initialize()
+
+	if export {
+		if err := s.Export("data"); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 
 	// Will temporarily overwrite all previous configs.
 	s.AddObject(store.IndexConfig, store.Config{

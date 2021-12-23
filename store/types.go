@@ -13,6 +13,14 @@ const (
 	IndexTimeoutExpire = "timeout-expire"
 )
 
+var Fields = []string{
+	FieldGlucose,
+	FieldGlucosePred,
+	FieldCarbohydrate,
+	FieldInsulin,
+	FieldObject,
+}
+
 type Trend int
 
 const (
@@ -27,20 +35,20 @@ const (
 )
 
 type TimePoint struct {
-	Time  time.Time
-	Value float64
-	Trend Trend
+	Time  time.Time `csv:"time"`
+	Value float64   `csv:"value"`
+	Trend Trend     `csv:"trend"`
 }
 
 type Carbohydrate struct {
-	Time  time.Time
-	Value int
+	Time  time.Time `csv:"time"`
+	Value int       `csv:"value"`
 }
 
 type Insulin struct {
-	Time  time.Time
-	Type  string
-	Value int
+	Time  time.Time `csv:"time"`
+	Type  string    `csv:"type"`
+	Value int       `csv:"value"`
 }
 
 type Config struct {
