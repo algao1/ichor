@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"sync"
 	"time"
 
 	"github.com/boltdb/bolt"
@@ -15,6 +16,7 @@ import (
 
 type Store struct {
 	DB *bolt.DB
+	mu sync.Mutex
 }
 
 func Create() (*Store, error) {
@@ -22,13 +24,16 @@ func Create() (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("unable to create store: %w", err)
 	}
-	return &Store{db}, nil
+	return &Store{DB: db}, nil
 }
 
 // Initialize stands up the necessary buckets for future transactions.
 // TODO: This requires an overhaul, manually configuring bucket creation
 //			 is a bit of a hassle.
 func (s *Store) Initialize() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	return s.DB.Update(func(tx *bolt.Tx) error {
 		for _, field := range Fields {
 			_, err := tx.CreateBucketIfNotExists([]byte(field))
@@ -87,6 +92,9 @@ func (s *Store) Export(filepath string) error {
 // AddPoint adds a singular TimePoint under a field.
 // Returns an error if the field does not exist.
 func (s *Store) AddPoint(field string, t time.Time, pt interface{}) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	return s.DB.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(field))
 		if b == nil {
@@ -109,6 +117,9 @@ func (s *Store) GetPoints(start, end time.Time, field string, ptsPtr interface{}
 	max := timeToBytes(end)
 
 	values := make([][]byte, 0)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	err := s.DB.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(field))
@@ -154,6 +165,9 @@ func (s *Store) GetPoints(start, end time.Time, field string, ptsPtr interface{}
 
 func (s *Store) GetLastPoints(field string, last int, ptsPtr interface{}) error {
 	values := make([][]byte, 0)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	err := s.DB.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(field))
@@ -204,6 +218,9 @@ func (s *Store) GetLastPoints(field string, last int, ptsPtr interface{}) error 
 }
 
 func (s *Store) AddObject(index string, obj interface{}) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	return s.DB.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(FieldObject))
 		if b == nil {
@@ -220,6 +237,9 @@ func (s *Store) AddObject(index string, obj interface{}) error {
 }
 
 func (s *Store) GetObject(index string, obj interface{}) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	var found []byte
 	err := s.DB.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(FieldObject))
