@@ -145,7 +145,7 @@ func plotCarbohydrates(yrange float64, xys plotter.XYs, carbs []store.Carbohydra
 
 		carby := xys[c].Y
 		if c < len(xys)-1 {
-			carby = xys[c-1].Y + (xys[c].Y-xys[c-1].Y)*(carbx-xys[c-1].X)/300
+			carby = xys[c-1].Y + (xys[c].Y-xys[c-1].Y)*(carbx-xys[c-1].X)/(xys[c].X-xys[c-1].X)
 		}
 
 		carbxys = append(carbxys, plotter.XY{X: carbx, Y: carby - offset})
@@ -178,7 +178,7 @@ func plotInsulin(yrange float64, xys plotter.XYs, insulin []store.Insulin, p *pl
 
 		dosey := xys[c].Y
 		if c < len(xys)-1 {
-			dosey = xys[c-1].Y + (xys[c].Y-xys[c-1].Y)*(dosex-xys[c-1].X)/300
+			dosey = xys[c-1].Y + (xys[c].Y-xys[c-1].Y)*(dosex-xys[c-1].X)/(xys[c].X-xys[c-1].X)
 		}
 
 		dosexys = append(dosexys, plotter.XY{X: dosex, Y: dosey + offset})
