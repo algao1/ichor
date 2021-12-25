@@ -1,66 +1,55 @@
 from concurrent import futures
 
+import logging
 import math
+import os
+
 from datetime import datetime, timedelta
 from google.protobuf.timestamp_pb2 import Timestamp
 
 import lightgbm as lgb
 import numpy as np
 import pandas as pd
+import tensorflow as tf
+from tensorflow import keras
 
 import grpc
 import glucose_pb2
 import glucose_pb2_grpc
 
-def transformTimeSeries(request):
-  tts = []
-  dt = datetime.fromtimestamp(request.time.seconds)
-
-  # Hour sin/cos.
-  tts.append(math.sin(dt.hour * 2 * math.pi / 24))
-  tts.append(math.cos(dt.hour * 2 * math.pi / 24))
-
-  # Day sin/cos.
-  tts.append(math.sin(dt.day * 2 * math.pi / 7))
-  tts.append(math.cos(dt.day * 2 * math.pi / 7))
-
-  # Value change pos/neg, max pos/neg.
-  s = pd.Series(np.array(request.values))
-  sc = s.diff().dropna()
-
-  tts.append(sc.max())
-  tts.append(sc.min())
-  tts.append(sc[sc > 0].sum())
-  tts.append(sc[sc < 0].sum())
-
-  # Difference at 15, 30, 60 minutes.
-  tts.append(s.diff(3).iloc[-1])
-  tts.append(s.diff(6).iloc[-1])
-  tts.append(s.diff(12).iloc[-1])
-
-  # Standard deviation at 1 hour and 2 hour.
-  tts.append(s.rolling(12).std().iloc[-1])
-  tts.append(s.rolling(24).std().iloc[-1])
-
-  tts.extend(reversed(request.values))
-
-  return np.array(tts).reshape((1, -1))
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
 class GlucoseServicer(glucose_pb2_grpc.GlucoseServicer):
 
   def __init__(self):
-    self.model = lgb.Booster(model_file="models/lgbm_regression.txt")
-    print("Model loaded.")
-
+    self.model = keras.models.load_model("models/dnn_model")
+    logging.info("Models loaded.")
+  
   def Predict(self, request, context):
+    logging.warning(request.values)
+
     if len(request.values) < 24:
-      return glucose_pb2.Label(value=4.2)
+      context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+      context.set_details("Not enough points.")
+      return glucose_pb2.Labels()
     else:
-      pred = self.model.predict(transformTimeSeries(request))
-      predTime = datetime.fromtimestamp(request.time.seconds) + timedelta(hours=2)
-      ts = Timestamp()
-      ts.FromDatetime(predTime)
-      return glucose_pb2.Label(value=math.exp(pred), time=ts)
+      # Processing.
+      data = np.array(request.values).reshape([-1, 24])
+      mean, std = data.mean(), data.std()
+
+      # Unnormalize data.
+      data = (data - mean) / std
+      preds = self.model.predict(data)
+      preds = preds * std + mean
+
+      labels = []
+      for i, pred in enumerate(preds.reshape(12)):
+        pred_time = datetime.fromtimestamp(request.time.seconds) + timedelta(minutes=(i+1)*5)
+        ts = Timestamp()
+        ts.FromDatetime(pred_time)
+        labels.append(glucose_pb2.Label(value=np.float64(pred), time=ts))
+
+      return glucose_pb2.Labels(labels=labels)
 
 def serve():
   server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))

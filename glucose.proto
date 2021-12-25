@@ -6,9 +6,7 @@ import "google/protobuf/timestamp.proto";
 option go_package = "github.com/algao1/ichor/pb";
 
 service Glucose {
-  // A simple RPC that obtains a prediction on a future glucose
-  // value based on current and past values.
-  rpc Predict(Features) returns (Label) {}
+  rpc Predict(Features) returns (Labels) {}
 }
 
 message Features {
@@ -19,4 +17,8 @@ message Features {
 message Label {
   google.protobuf.Timestamp time = 1;
   double value = 2;
+}
+
+message Labels {
+  repeated Label labels = 1;
 }

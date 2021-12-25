@@ -3,6 +3,7 @@ package predictor
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/algao1/ichor/pb"
 	"github.com/algao1/ichor/store"
@@ -20,7 +21,7 @@ func New(conn *grpc.ClientConn) *Client {
 	}
 }
 
-func (c *Client) Predict(ctx context.Context, pts []store.TimePoint) (*store.TimePoint, error) {
+func (c *Client) Predict(ctx context.Context, pts []store.TimePoint) ([]store.TimePoint, error) {
 	if len(pts) == 0 {
 		return nil, fmt.Errorf("no points given")
 	}
@@ -30,7 +31,7 @@ func (c *Client) Predict(ctx context.Context, pts []store.TimePoint) (*store.Tim
 		values[i] = pt.Value
 	}
 
-	pred, err := c.gc.Predict(ctx, &pb.Features{
+	res, err := c.gc.Predict(ctx, &pb.Features{
 		Values: values,
 		Time:   timestamppb.New(pts[len(pts)-1].Time),
 	})
@@ -38,9 +39,14 @@ func (c *Client) Predict(ctx context.Context, pts []store.TimePoint) (*store.Tim
 		return nil, err
 	}
 
-	return &store.TimePoint{
-		Value: pred.Value,
-		Time:  pred.GetTime().AsTime(),
-		Trend: store.Missing,
-	}, nil
+	rpts := make([]store.TimePoint, len(res.Labels))
+	for i, label := range res.Labels {
+		rpts[i] = store.TimePoint{
+			Value: label.GetValue(),
+			Time:  label.GetTime().AsTime().Round(5 * time.Minute),
+			Trend: store.Missing,
+		}
+	}
+
+	return rpts, nil
 }

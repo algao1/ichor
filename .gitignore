@@ -1,2 +1,5 @@
 data
 py/__pycache__
+
+# Scripts
+start.sh

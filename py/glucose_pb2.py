@@ -20,7 +20,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   syntax='proto3',
   serialized_options=b'Z\032github.com/algao1/ichor/pb',
   create_key=_descriptor._internal_create_key,
-  serialized_pb=b'\n\rglucose.proto\x12\x05proto\x1a\x1fgoogle/protobuf/timestamp.proto\"D\n\x08\x46\x65\x61tures\x12(\n\x04time\x18\x01 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x0e\n\x06values\x18\x02 \x03(\x01\"@\n\x05Label\x12(\n\x04time\x18\x01 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\r\n\x05value\x18\x02 \x01(\x01\x32\x35\n\x07Glucose\x12*\n\x07Predict\x12\x0f.proto.Features\x1a\x0c.proto.Label\"\x00\x42\x1cZ\x1agithub.com/algao1/ichor/pbb\x06proto3'
+  serialized_pb=b'\n\rglucose.proto\x12\x05proto\x1a\x1fgoogle/protobuf/timestamp.proto\"D\n\x08\x46\x65\x61tures\x12(\n\x04time\x18\x01 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x0e\n\x06values\x18\x02 \x03(\x01\"@\n\x05Label\x12(\n\x04time\x18\x01 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\r\n\x05value\x18\x02 \x01(\x01\"&\n\x06Labels\x12\x1c\n\x06labels\x18\x01 \x03(\x0b\x32\x0c.proto.Label26\n\x07Glucose\x12+\n\x07Predict\x12\x0f.proto.Features\x1a\r.proto.Labels\"\x00\x42\x1cZ\x1agithub.com/algao1/ichor/pbb\x06proto3'
   ,
   dependencies=[google_dot_protobuf_dot_timestamp__pb2.DESCRIPTOR,])
 
@@ -104,10 +104,44 @@ _LABEL = _descriptor.Descriptor(
   serialized_end=191,
 )
 
+
+_LABELS = _descriptor.Descriptor(
+  name='Labels',
+  full_name='proto.Labels',
+  filename=None,
+  file=DESCRIPTOR,
+  containing_type=None,
+  create_key=_descriptor._internal_create_key,
+  fields=[
+    _descriptor.FieldDescriptor(
+      name='labels', full_name='proto.Labels.labels', index=0,
+      number=1, type=11, cpp_type=10, label=3,
+      has_default_value=False, default_value=[],
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+  ],
+  extensions=[
+  ],
+  nested_types=[],
+  enum_types=[
+  ],
+  serialized_options=None,
+  is_extendable=False,
+  syntax='proto3',
+  extension_ranges=[],
+  oneofs=[
+  ],
+  serialized_start=193,
+  serialized_end=231,
+)
+
 _FEATURES.fields_by_name['time'].message_type = google_dot_protobuf_dot_timestamp__pb2._TIMESTAMP
 _LABEL.fields_by_name['time'].message_type = google_dot_protobuf_dot_timestamp__pb2._TIMESTAMP
+_LABELS.fields_by_name['labels'].message_type = _LABEL
 DESCRIPTOR.message_types_by_name['Features'] = _FEATURES
 DESCRIPTOR.message_types_by_name['Label'] = _LABEL
+DESCRIPTOR.message_types_by_name['Labels'] = _LABELS
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
 Features = _reflection.GeneratedProtocolMessageType('Features', (_message.Message,), {
@@ -124,6 +158,13 @@ Label = _reflection.GeneratedProtocolMessageType('Label', (_message.Message,), {
   })
 _sym_db.RegisterMessage(Label)
 
+Labels = _reflection.GeneratedProtocolMessageType('Labels', (_message.Message,), {
+  'DESCRIPTOR' : _LABELS,
+  '__module__' : 'glucose_pb2'
+  # @@protoc_insertion_point(class_scope:proto.Labels)
+  })
+_sym_db.RegisterMessage(Labels)
+
 
 DESCRIPTOR._options = None
 
@@ -134,8 +175,8 @@ _GLUCOSE = _descriptor.ServiceDescriptor(
   index=0,
   serialized_options=None,
   create_key=_descriptor._internal_create_key,
-  serialized_start=193,
-  serialized_end=246,
+  serialized_start=233,
+  serialized_end=287,
   methods=[
   _descriptor.MethodDescriptor(
     name='Predict',
@@ -143,7 +184,7 @@ _GLUCOSE = _descriptor.ServiceDescriptor(
     index=0,
     containing_service=None,
     input_type=_FEATURES,
-    output_type=_LABEL,
+    output_type=_LABELS,
     serialized_options=None,
     create_key=_descriptor._internal_create_key,
   ),

@@ -1,4 +1,4 @@
-FROM python:latest AS build_base
+FROM tensorflow/tensorflow:latest AS build_base
 
 WORKDIR /model-inference
 

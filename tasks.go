@@ -49,17 +49,19 @@ func RunPredictor(client *predictor.Client, s *store.Store, alertCh chan<- disco
 			continue
 		}
 
-		ftp, err := client.Predict(context.Background(), pastPoints)
+		fpts, err := client.Predict(context.Background(), pastPoints)
 		if err != nil {
 			log.Printf("Failed to make a prediction: %s\n", err)
 			continue
 		}
 
-		s.AddPoint(store.FieldGlucosePred, ftp.Time, &store.TimePoint{
-			Time:  ftp.Time,
-			Value: ftp.Value,
-			Trend: ftp.Trend,
-		})
+		for _, fpt := range fpts {
+			s.AddPoint(store.FieldGlucosePred, fpt.Time, &store.TimePoint{
+				Time:  fpt.Time,
+				Value: fpt.Value,
+				Trend: fpt.Trend,
+			})
+		}
 
 		// Everything below here is very not production ready.
 		// TODO: Fix everything.
@@ -76,12 +78,12 @@ func RunPredictor(client *predictor.Client, s *store.Store, alertCh chan<- disco
 			continue
 		}
 
-		if ftp.Value <= conf.LowThreshold {
-			alertCh <- discord.Low
-			s.AddObject(store.IndexTimeoutExpire, time.Now().Add(conf.WarningTimeout))
-		} else if ftp.Value >= conf.HighThreshold {
-			alertCh <- discord.High
-			s.AddObject(store.IndexTimeoutExpire, time.Now().Add(conf.WarningTimeout))
-		}
+		// if ftp.Value <= conf.LowThreshold {
+		// 	alertCh <- discord.Low
+		// 	s.AddObject(store.IndexTimeoutExpire, time.Now().Add(conf.WarningTimeout))
+		// } else if ftp.Value >= conf.HighThreshold {
+		// 	alertCh <- discord.High
+		// 	s.AddObject(store.IndexTimeoutExpire, time.Now().Add(conf.WarningTimeout))
+		// }
 	}
 }

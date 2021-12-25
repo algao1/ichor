@@ -17,7 +17,7 @@ class GlucoseStub(object):
         self.Predict = channel.unary_unary(
                 '/proto.Glucose/Predict',
                 request_serializer=glucose__pb2.Features.SerializeToString,
-                response_deserializer=glucose__pb2.Label.FromString,
+                response_deserializer=glucose__pb2.Labels.FromString,
                 )
 
 
@@ -25,9 +25,7 @@ class GlucoseServicer(object):
     """Missing associated documentation comment in .proto file."""
 
     def Predict(self, request, context):
-        """A simple RPC that obtains a prediction on a future glucose
-        value based on current and past values.
-        """
+        """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
@@ -38,7 +36,7 @@ def add_GlucoseServicer_to_server(servicer, server):
             'Predict': grpc.unary_unary_rpc_method_handler(
                     servicer.Predict,
                     request_deserializer=glucose__pb2.Features.FromString,
-                    response_serializer=glucose__pb2.Label.SerializeToString,
+                    response_serializer=glucose__pb2.Labels.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -63,6 +61,6 @@ class Glucose(object):
             metadata=None):
         return grpc.experimental.unary_unary(request, target, '/proto.Glucose/Predict',
             glucose__pb2.Features.SerializeToString,
-            glucose__pb2.Label.FromString,
+            glucose__pb2.Labels.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)

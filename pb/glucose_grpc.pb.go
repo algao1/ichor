@@ -18,9 +18,7 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type GlucoseClient interface {
-	// A simple RPC that obtains a prediction on a future glucose
-	// value based on current and past values.
-	Predict(ctx context.Context, in *Features, opts ...grpc.CallOption) (*Label, error)
+	Predict(ctx context.Context, in *Features, opts ...grpc.CallOption) (*Labels, error)
 }
 
 type glucoseClient struct {
@@ -31,8 +29,8 @@ func NewGlucoseClient(cc grpc.ClientConnInterface) GlucoseClient {
 	return &glucoseClient{cc}
 }
 
-func (c *glucoseClient) Predict(ctx context.Context, in *Features, opts ...grpc.CallOption) (*Label, error) {
-	out := new(Label)
+func (c *glucoseClient) Predict(ctx context.Context, in *Features, opts ...grpc.CallOption) (*Labels, error) {
+	out := new(Labels)
 	err := c.cc.Invoke(ctx, "/proto.Glucose/Predict", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -44,9 +42,7 @@ func (c *glucoseClient) Predict(ctx context.Context, in *Features, opts ...grpc.
 // All implementations must embed UnimplementedGlucoseServer
 // for forward compatibility
 type GlucoseServer interface {
-	// A simple RPC that obtains a prediction on a future glucose
-	// value based on current and past values.
-	Predict(context.Context, *Features) (*Label, error)
+	Predict(context.Context, *Features) (*Labels, error)
 	mustEmbedUnimplementedGlucoseServer()
 }
 
@@ -54,7 +50,7 @@ type GlucoseServer interface {
 type UnimplementedGlucoseServer struct {
 }
 
-func (UnimplementedGlucoseServer) Predict(context.Context, *Features) (*Label, error) {
+func (UnimplementedGlucoseServer) Predict(context.Context, *Features) (*Labels, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Predict not implemented")
 }
 func (UnimplementedGlucoseServer) mustEmbedUnimplementedGlucoseServer() {}
