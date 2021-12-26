@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/algao1/ichor/store"
+	"go.uber.org/zap"
 )
 
 const (
@@ -25,6 +26,7 @@ const (
 
 type Client struct {
 	client      *http.Client
+	logger      *zap.Logger
 	accountName string
 	password    string
 	sessionID   string
@@ -59,11 +61,12 @@ func WithLocation(loc *time.Location) Option {
 	}
 }
 
-func New(accountName, password string, options ...Option) *Client {
+func New(accountName, password string, logger *zap.Logger, options ...Option) *Client {
 	loc, _ := time.LoadLocation("America/Toronto")
 
 	c := &Client{
 		client:      &http.Client{},
+		logger:      logger,
 		accountName: accountName,
 		password:    password,
 		loc:         loc,
@@ -88,6 +91,10 @@ func (c *Client) CreateSession() error {
 		return err
 	}
 
+	c.logger.Debug("making login request for sessionID",
+		zap.ByteString("request", b),
+	)
+
 	resp, err := c.client.Post(baseUrl+"/"+loginEndpoint, "application/json", bytes.NewBuffer(b))
 	if err != nil {
 		return err
@@ -99,6 +106,10 @@ func (c *Client) CreateSession() error {
 		return err
 	}
 	c.sessionID = strings.Trim(string(body), "\"")
+
+	c.logger.Debug("successfully obtained sessionID",
+		zap.String("sessionID", c.sessionID),
+	)
 
 	return nil
 }
@@ -150,6 +161,12 @@ func (c *Client) GetReadings(minutes, maxCount int) ([]*TransformedReading, erro
 			"maxCount":  {strconv.Itoa(maxCount)},
 		}
 
+		c.logger.Debug("making fetch request",
+			zap.String("sessionID", c.sessionID),
+			zap.Int("minutes", minutes),
+			zap.Int("maximum count", maxCount),
+		)
+
 		resp, err := http.Get(baseUrl + "/" + readingsEndpoint + "?" + params.Encode())
 		if err != nil {
 			return nil, err
@@ -160,6 +177,8 @@ func (c *Client) GetReadings(minutes, maxCount int) ([]*TransformedReading, erro
 		if err == nil {
 			break
 		}
+
+		c.logger.Debug("failed to decode readings response, restarting session")
 
 		err = c.CreateSession()
 		if err != nil {
@@ -175,6 +194,10 @@ func (c *Client) GetReadings(minutes, maxCount int) ([]*TransformedReading, erro
 		}
 		res[i] = tr
 	}
+
+	c.logger.Debug("received readings from share API",
+		zap.Int("count", len(res)),
+	)
 
 	return res, nil
 }

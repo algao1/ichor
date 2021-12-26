@@ -10,6 +10,7 @@ import (
 	"github.com/algao1/ichor/glucose/dexcom"
 	"github.com/algao1/ichor/glucose/predictor"
 	"github.com/algao1/ichor/store"
+	"go.uber.org/zap"
 )
 
 const (
@@ -17,23 +18,31 @@ const (
 	DefaultMaxCount = 288
 )
 
-func RunUploader(client *dexcom.Client, s *store.Store) {
+func RunUploader(client *dexcom.Client, s *store.Store, logger *zap.Logger) {
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 
-	for t := time.Now(); true; t = <-ticker.C {
+	for time.Now(); true; <-ticker.C {
 		trs, err := client.GetReadings(DefaultMinutes, DefaultMaxCount)
 		if err != nil {
-			log.Println("Failed to get readings: " + t.Format(time.RFC3339))
+			logger.Info("failed to fetch readings",
+				zap.Error(err),
+			)
 			continue
 		}
 
 		for _, tr := range trs {
-			s.AddPoint(store.FieldGlucose, tr.Time, &store.TimePoint{
+			err := s.AddPoint(store.FieldGlucose, tr.Time, &store.TimePoint{
 				Time:  tr.Time,
 				Value: tr.Mmol,
 				Trend: tr.Trend,
 			})
+			if err != nil {
+				logger.Info("failed to save glucose reading",
+					zap.Any("reading", tr),
+					zap.Error(err),
+				)
+			}
 		}
 	}
 }
@@ -68,7 +77,7 @@ func RunPredictor(client *predictor.Client, s *store.Store, alertCh chan<- disco
 
 		var conf store.Config
 		if err = s.GetObject(store.IndexConfig, &conf); err != nil {
-			panic(fmt.Errorf("unable to load config: %w", err))
+			panic(fmt.Errorf("failed to load config: %w", err))
 		}
 
 		var expire time.Time
