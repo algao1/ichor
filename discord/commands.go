@@ -29,6 +29,16 @@ const (
 	LongActing  = "long"
 )
 
+var defaultFooter = discord.EmbedFooter{
+	Text: "This bot is still under construction.",
+}
+
+var inlineBlankField = discord.EmbedField{
+	Name:   "\u200b",
+	Value:  "\u200b",
+	Inline: true,
+}
+
 var registeredCommands = []api.CreateCommandData{
 	{
 		Name:        "glucose",
@@ -79,14 +89,32 @@ var registeredCommands = []api.CreateCommandData{
 }
 
 type GlucoseReport struct {
-	Value float64
-	Trend store.Trend
-	Mean  float64
-	Std   float64
+	Description string
+
+	// Current and future value.
+	Value     float64
+	Trend     store.Trend
+	Predicted float64
+
+	// 12h overview.
+	Mean           float64
+	Std            float64
+	TimeInRange    float64
+	TimeBelowRange float64
+	TimeAboveRange float64
+
 	Chart sendpart.File
 }
 
 type WeeklyReport struct {
+	Description string
+
+	// Weekly overview.
+	TimeInRange    float64
+	TimeBelowRange float64
+	TimeAboveRange float64
+	WeeklyChange   float64 // Change in TimeInRange from last week.
+
 	Chart sendpart.File
 }
 
@@ -132,17 +160,29 @@ func interactionCreate(ses *session.Session, sto *store.Store) func(e *gateway.I
 				resp = api.InteractionResponse{
 					Type: api.MessageInteractionWithSource,
 					Data: &api.InteractionResponseData{
-						Embeds: &[]discord.Embed{{
-							Title: "Recent Glucose & Predictions",
-							Image: &discord.EmbedImage{URL: "attachment://" + gr.Chart.Name},
-							Fields: []discord.EmbedField{
-								{Name: "Current", Value: floatToString(gr.Value)},
-								{Name: "Trend", Value: "\\" + trendToString(gr.Trend)},
-								{Name: "Mean", Value: floatToString(gr.Mean)},
-								{Name: "Std", Value: floatToString(gr.Std)},
+						Embeds: &[]discord.Embed{
+							{
+								Title:       "Recent Glucose & Predictions",
+								Description: gr.Description,
+								Image:       &discord.EmbedImage{URL: "attachment://" + gr.Chart.Name},
+								Fields: []discord.EmbedField{
+									// Line 1.
+									{Name: "Current", Value: floatToString(gr.Value), Inline: true},
+									{Name: "Trend", Value: "\\" + trendToString(gr.Trend), Inline: true},
+									{Name: "Predicted", Value: floatToString(gr.Predicted), Inline: true},
+									// Line 2.
+									{Name: "Mean", Value: floatToString(gr.Mean), Inline: true},
+									{Name: "Std Dev", Value: floatToString(gr.Std), Inline: true},
+									inlineBlankField,
+									// Line 3.
+									{Name: "In Range", Value: floatToString(gr.TimeInRange), Inline: true},
+									{Name: "Below Range", Value: floatToString(gr.TimeBelowRange), Inline: true},
+									{Name: "Above Range", Value: floatToString(gr.TimeAboveRange), Inline: true},
+								},
+								Footer: &defaultFooter,
+								Color:  discord.Color(WarnLevel1),
 							},
-							Color: discord.Color(WarnLevel1),
-						}},
+						},
 						Files: []sendpart.File{gr.Chart},
 					},
 				}
@@ -163,9 +203,19 @@ func interactionCreate(ses *session.Session, sto *store.Store) func(e *gateway.I
 					Type: api.MessageInteractionWithSource,
 					Data: &api.InteractionResponseData{
 						Embeds: &[]discord.Embed{{
-							Title: "Weekly Overlay",
-							Image: &discord.EmbedImage{URL: "attachment://" + wr.Chart.Name},
-							Color: discord.Color(WarnLevel1),
+							Title:       "Weekly Overlay",
+							Description: wr.Description,
+							Image:       &discord.EmbedImage{URL: "attachment://" + wr.Chart.Name},
+							Fields: []discord.EmbedField{
+								// Line 1.
+								{Name: "In Range", Value: floatToString(wr.TimeInRange), Inline: true},
+								{Name: "Below Range", Value: floatToString(wr.TimeBelowRange), Inline: true},
+								{Name: "Above Range", Value: floatToString(wr.TimeAboveRange), Inline: true},
+								// Line 2.
+								{Name: "Weekly Change", Value: signedFloatString(wr.WeeklyChange), Inline: true},
+							},
+							Footer: &defaultFooter,
+							Color:  discord.Color(WarnLevel1),
 						}},
 						Files: []sendpart.File{wr.Chart},
 					},
@@ -263,11 +313,6 @@ func glucoseReport(sto *store.Store) (*GlucoseReport, error) {
 		return nil, fmt.Errorf("unable to get insulin doses: %w", err)
 	}
 
-	x := make([]float64, len(pts))
-	for i, pt := range pts {
-		x[i] = pt.Value
-	}
-
 	var conf store.Config
 	if err = sto.GetObject(store.IndexConfig, &conf); err != nil {
 		return nil, fmt.Errorf("unable to load config: %w", err)
@@ -279,26 +324,63 @@ func glucoseReport(sto *store.Store) (*GlucoseReport, error) {
 	}
 
 	curPt := pts[len(pts)-1]
+	predPt := store.TimePoint{Value: -1}
+	if len(preds) != 0 {
+		predPt = preds[len(preds)-1]
+	}
+
+	total := float64(len(pts))
+	var within, below, above float64
+
+	x := make([]float64, len(pts))
+	for i, pt := range pts {
+		x[i] = pt.Value
+
+		if pt.Value < conf.LowThreshold {
+			below++
+		} else if pt.Value > conf.HighThreshold {
+			above++
+		} else {
+			within++
+		}
+	}
+
 	mean := stat.Mean(x, nil)
 	std := stat.StdDev(x, nil)
 
 	return &GlucoseReport{
-		Value: curPt.Value,
-		Trend: curPt.Trend,
-		Mean:  mean,
-		Std:   std,
-		Chart: sendpart.File{Name: "glucoseChart.png", Reader: r},
+		Description: fmt.Sprintf("%s - %s",
+			start.In(loc).Format("Jan 02 15:04:05"),
+			end.In(loc).Format("Jan 02 15:04:05"),
+		),
+		Value:          curPt.Value,
+		Trend:          curPt.Trend,
+		Predicted:      predPt.Value,
+		Mean:           mean,
+		Std:            std,
+		TimeInRange:    within / total,
+		TimeBelowRange: below / total,
+		TimeAboveRange: above / total,
+		Chart:          sendpart.File{Name: "glucoseChart.png", Reader: r},
 	}, nil
 }
 
 func weeklyReport(offset int, sto *store.Store) (*WeeklyReport, error) {
 	t := time.Now().In(loc).AddDate(0, 0, -7*offset)
 	ws := weekStart(t)
+	we := ws.AddDate(0, 0, 7)
 
 	var pts []store.TimePoint
-	err := sto.GetPoints(ws, ws.AddDate(0, 0, 7), store.FieldGlucose, &pts)
+	err := sto.GetPoints(ws, we, store.FieldGlucose, &pts)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get points: %w", err)
+	}
+
+	// Get last week's points.
+	var lwPts []store.TimePoint
+	err = sto.GetPoints(ws.AddDate(0, 0, -7), ws, store.FieldGlucose, &lwPts)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get last week's points: %w", err)
 	}
 
 	var conf store.Config
@@ -311,7 +393,39 @@ func weeklyReport(offset int, sto *store.Store) (*WeeklyReport, error) {
 		return nil, fmt.Errorf("unable to generate weekly plot: %w", err)
 	}
 
+	total := float64(len(pts))
+	var within, below, above float64
+
+	x := make([]float64, len(pts))
+	for i, pt := range pts {
+		x[i] = pt.Value
+
+		if pt.Value < conf.LowThreshold {
+			below++
+		} else if pt.Value > conf.HighThreshold {
+			above++
+		} else {
+			within++
+		}
+	}
+
+	lwTotal := float64(len(lwPts))
+	var lwWithin float64
+	for _, pt := range lwPts {
+		if pt.Value >= conf.LowThreshold && pt.Value <= conf.HighThreshold {
+			lwWithin++
+		}
+	}
+
 	return &WeeklyReport{
-		Chart: sendpart.File{Name: "weeklyOverlay.png", Reader: r},
+		Description: fmt.Sprintf("%s - %s",
+			ws.In(loc).Format("Mon, 02 Jan 2006"),
+			ws.AddDate(0, 0, 6).In(loc).Format("Mon, 02 Jan 2006"),
+		),
+		TimeInRange:    within / total,
+		TimeBelowRange: below / total,
+		TimeAboveRange: above / total,
+		WeeklyChange:   within/total - lwWithin/lwTotal,
+		Chart:          sendpart.File{Name: "weeklyOverlay.png", Reader: r},
 	}, nil
 }

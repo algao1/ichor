@@ -45,6 +45,14 @@ func floatToString(v float64) string {
 	return strconv.FormatFloat(v, 'f', 2, 64)
 }
 
+func signedFloatString(v float64) string {
+	s := floatToString(v)
+	if v > 0 {
+		s = "+" + s
+	}
+	return s
+}
+
 func trendToString(t store.Trend) string {
 	switch t {
 	case store.DoubleUp:
