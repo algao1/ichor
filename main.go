@@ -45,7 +45,7 @@ func main() {
 
 	logger = logger.Named("ichor")
 
-	s, err := store.Create()
+	s, err := store.Create(logger.Named("store"))
 	if err != nil {
 		logger.Fatal("failed to create store",
 			zap.Error(err),

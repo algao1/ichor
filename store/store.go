@@ -12,19 +12,24 @@ import (
 
 	"github.com/boltdb/bolt"
 	"github.com/gocarina/gocsv"
+	"go.uber.org/zap"
 )
 
 type Store struct {
-	DB *bolt.DB
-	mu sync.Mutex
+	DB     *bolt.DB
+	logger *zap.Logger
+	mu     sync.Mutex
 }
 
-func Create() (*Store, error) {
+func Create(logger *zap.Logger) (*Store, error) {
 	db, err := bolt.Open("data/ichor.db", 0600, nil)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create store: %w", err)
 	}
-	return &Store{DB: db}, nil
+
+	logger.Info("created bolt database")
+
+	return &Store{DB: db, logger: logger}, nil
 }
 
 // Initialize stands up the necessary buckets for future transactions.
@@ -40,14 +45,18 @@ func (s *Store) Initialize() error {
 			if err != nil {
 				return fmt.Errorf("unable to create bucket: %w", err)
 			}
+			s.logger.Info("ensured bucket exists",
+				zap.String("bucket", field),
+			)
 		}
 
 		return nil
 	})
 }
 
-func (s *Store) exportSingle(filename string, in interface{}) error {
-	file, err := os.OpenFile(fmt.Sprintf("%s.csv", filename), os.O_RDWR|os.O_CREATE, os.ModePerm)
+func (s *Store) exportSingle(filepath, field string, in interface{}) error {
+	dest := fmt.Sprintf("%s/%s.csv", filepath, field)
+	file, err := os.OpenFile(dest, os.O_RDWR|os.O_CREATE, os.ModePerm)
 	if err != nil {
 		return err
 	}
@@ -58,6 +67,11 @@ func (s *Store) exportSingle(filename string, in interface{}) error {
 		return err
 	}
 
+	s.logger.Info("successfully exported bucket as csv",
+		zap.String("bucket", field),
+		zap.String("filepath", dest),
+	)
+
 	return nil
 }
 
@@ -66,7 +80,7 @@ func (s *Store) Export(filepath string) error {
 	if err := s.GetPoints(time.Unix(0, 0), time.Now(), FieldGlucose, &gl); err != nil {
 		return err
 	}
-	if err := s.exportSingle(filepath+"/"+FieldGlucose, gl); err != nil {
+	if err := s.exportSingle(filepath, FieldGlucose, gl); err != nil {
 		return err
 	}
 
@@ -74,7 +88,7 @@ func (s *Store) Export(filepath string) error {
 	if err := s.GetPoints(time.Unix(0, 0), time.Now(), FieldCarbohydrate, &carbs); err != nil {
 		return err
 	}
-	if err := s.exportSingle(filepath+"/"+FieldCarbohydrate, carbs); err != nil {
+	if err := s.exportSingle(filepath, FieldCarbohydrate, carbs); err != nil {
 		return err
 	}
 
@@ -82,9 +96,11 @@ func (s *Store) Export(filepath string) error {
 	if err := s.GetPoints(time.Unix(0, 0), time.Now(), FieldInsulin, &insulin); err != nil {
 		return err
 	}
-	if err := s.exportSingle(filepath+"/"+FieldInsulin, insulin); err != nil {
+	if err := s.exportSingle(filepath, FieldInsulin, insulin); err != nil {
 		return err
 	}
+
+	s.logger.Info("completed export of database")
 
 	return nil
 }
@@ -105,6 +121,12 @@ func (s *Store) AddPoint(field string, t time.Time, pt interface{}) error {
 		if err != nil {
 			return err
 		}
+
+		s.logger.Debug("added point",
+			zap.String("field", field),
+			zap.Time("time", t),
+			zap.Any("point", pt),
+		)
 
 		return b.Put(timeToBytes(t), encoded)
 	})
@@ -131,6 +153,13 @@ func (s *Store) GetPoints(start, end time.Time, field string, ptsPtr interface{}
 		for k, v := c.Seek(min); k != nil && bytes.Compare(k, max) <= 0; k, v = c.Next() {
 			values = append(values, v)
 		}
+
+		s.logger.Debug("found points",
+			zap.String("field", field),
+			zap.Time("start", start),
+			zap.Time("end", end),
+			zap.Int("found", len(values)),
+		)
 
 		return nil
 	})
@@ -180,6 +209,13 @@ func (s *Store) GetLastPoints(field string, last int, ptsPtr interface{}) error 
 			values = append(values, v)
 			last--
 		}
+
+		s.logger.Debug("found points",
+			zap.String("field", field),
+			zap.Int("last", last),
+			zap.Int("found", len(values)),
+		)
+
 		return nil
 	})
 	if err != nil {
@@ -232,6 +268,11 @@ func (s *Store) AddObject(index string, obj interface{}) error {
 			return err
 		}
 
+		s.logger.Debug("added object",
+			zap.String("index", index),
+			zap.Any("object", obj),
+		)
+
 		return b.Put([]byte(index), encoded)
 	})
 }
@@ -251,6 +292,11 @@ func (s *Store) GetObject(index string, obj interface{}) error {
 		if found == nil {
 			return fmt.Errorf("unable to find key: %s", index)
 		}
+
+		s.logger.Debug("found object",
+			zap.String("index", index),
+			zap.Any("object", obj),
+		)
 
 		return nil
 	})
