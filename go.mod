@@ -4,7 +4,7 @@ go 1.17
 
 require (
 	github.com/boltdb/bolt v1.3.1
-	github.com/diamondburned/arikawa/v3 v3.0.0-rc.3
+	github.com/diamondburned/arikawa/v3 v3.0.0-rc.4
 	github.com/gin-gonic/gin v1.7.4
 	github.com/golang/protobuf v1.5.0
 	github.com/lucasb-eyer/go-colorful v1.2.0

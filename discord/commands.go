@@ -3,6 +3,7 @@ package discord
 import (
 	"fmt"
 	"log"
+	"strconv"
 	"time"
 
 	"github.com/algao1/ichor/store"
@@ -51,6 +52,7 @@ var registeredCommands = []api.CreateCommandData{
 			&discord.IntegerOption{
 				OptionName:  "offset",
 				Description: "Weekly offset.",
+				Min:         option.ZeroInt,
 				Required:    true,
 			},
 		},
@@ -62,7 +64,14 @@ var registeredCommands = []api.CreateCommandData{
 			&discord.IntegerOption{
 				OptionName:  "amount",
 				Description: "Amount of carbohydrates (grams).",
+				Min:         option.ZeroInt,
 				Required:    true,
+			},
+			&discord.IntegerOption{
+				OptionName:  "offset",
+				Description: "Offset in minutes.",
+				Min:         option.ZeroInt,
+				Required:    false,
 			},
 		},
 	},
@@ -82,7 +91,14 @@ var registeredCommands = []api.CreateCommandData{
 			&discord.IntegerOption{
 				OptionName:  "units",
 				Description: "Units of insulin.",
+				Min:         option.ZeroInt,
 				Required:    true,
+			},
+			&discord.IntegerOption{
+				OptionName:  "offset",
+				Description: "Offset in minutes.",
+				Min:         option.ZeroInt,
+				Required:    false,
 			},
 		},
 	},
@@ -118,6 +134,17 @@ type WeeklyReport struct {
 	Chart sendpart.File
 }
 
+type CarbohydrateResponse struct {
+	Value int
+	Time  time.Time
+}
+
+type InsulinResponse struct {
+	Type  string
+	Units int
+	Time  time.Time
+}
+
 func sendWarnMessage(ses *session.Session, cid discord.ChannelID, desc string) {
 	ses.SendMessageComplex(cid, api.SendMessageData{
 		Embeds: []discord.Embed{{
@@ -141,11 +168,20 @@ func interactionWarnResponse(desc string) api.InteractionResponse {
 	}
 }
 
+func getAllOptions(opts []discord.CommandInteractionOption) map[string]string {
+	optsMap := make(map[string]string)
+	for _, opt := range opts {
+		optsMap[opt.Name] = opt.Value.String()
+	}
+	return optsMap
+}
+
 func interactionCreate(ses *session.Session, sto *store.Store) func(e *gateway.InteractionCreateEvent) {
 	return func(e *gateway.InteractionCreateEvent) {
 		var resp api.InteractionResponse
 
 		// This is slightly ugly.
+		// TODO: Really need to move each case to its own function.
 
 		switch data := e.Data.(type) {
 		case *discord.CommandInteraction:
@@ -221,17 +257,24 @@ func interactionCreate(ses *session.Session, sto *store.Store) func(e *gateway.I
 					},
 				}
 			case "carbohydrates":
-				val, err := data.Options[0].IntValue()
+				var val, offset int
+
+				optsMap := getAllOptions(data.Options)
+				val, err := strconv.Atoi(optsMap["amount"])
 				if err != nil {
 					resp = interactionWarnResponse(err.Error())
 					break
 				}
 
-				now := time.Now().In(loc)
-				err = sto.AddPoint(store.FieldCarbohydrate, now, store.Carbohydrate{
-					Time:  now,
-					Value: int(val),
-				})
+				if off, ok := optsMap["offset"]; ok {
+					offset, err = strconv.Atoi(off)
+					if err != nil {
+						resp = interactionWarnResponse(err.Error())
+						break
+					}
+				}
+
+				cr, err := addCarbohydrate(val, offset, sto)
 				if err != nil {
 					resp = interactionWarnResponse(err.Error())
 					break
@@ -240,25 +283,41 @@ func interactionCreate(ses *session.Session, sto *store.Store) func(e *gateway.I
 				resp = api.InteractionResponse{
 					Type: api.MessageInteractionWithSource,
 					Data: &api.InteractionResponseData{
-						Content: option.NewNullableString(
-							fmt.Sprintf("Carbohydrate intake saved: grams %d", val),
-						),
+						Embeds: &[]discord.Embed{
+							{
+								Fields: []discord.EmbedField{
+									{Name: "Amount", Value: strconv.Itoa(val) + " grams", Inline: true},
+									{Name: "Time", Value: cr.Time.In(loc).Format("Jan 02 15:04:05"), Inline: true},
+								},
+								Footer: &defaultFooter,
+								Color:  discord.Color(WarnLevel1),
+							},
+						},
 					},
 				}
 			case "insulin":
-				itype := data.Options[0].String()
-				units, err := data.Options[1].IntValue()
+				var insulin string
+				var units, offset int
+
+				optsMap := getAllOptions(data.Options)
+
+				units, err := strconv.Atoi(optsMap["units"])
 				if err != nil {
 					resp = interactionWarnResponse(err.Error())
 					break
 				}
 
-				now := time.Now().In(loc)
-				err = sto.AddPoint(store.FieldInsulin, now, store.Insulin{
-					Time:  now,
-					Type:  itype,
-					Value: int(units),
-				})
+				if off, ok := optsMap["offset"]; ok {
+					offset, err = strconv.Atoi(off)
+					if err != nil {
+						resp = interactionWarnResponse(err.Error())
+						break
+					}
+				}
+
+				insulin = optsMap["type"]
+
+				ir, err := addInsulin(insulin, units, offset, sto)
 				if err != nil {
 					resp = interactionWarnResponse(err.Error())
 					break
@@ -267,9 +326,16 @@ func interactionCreate(ses *session.Session, sto *store.Store) func(e *gateway.I
 				resp = api.InteractionResponse{
 					Type: api.MessageInteractionWithSource,
 					Data: &api.InteractionResponseData{
-						Content: option.NewNullableString(
-							fmt.Sprintf("Insulin intake saved: type %s units %d", itype, units),
-						),
+						Embeds: &[]discord.Embed{
+							{
+								Fields: []discord.EmbedField{
+									{Name: "Units", Value: strconv.Itoa(ir.Units) + " units", Inline: true},
+									{Name: "Time", Value: ir.Time.In(loc).Format("Jan 02 15:04:05"), Inline: true},
+								},
+								Footer: &defaultFooter,
+								Color:  discord.Color(WarnLevel1),
+							},
+						},
 					},
 				}
 			}
@@ -427,5 +493,39 @@ func weeklyReport(offset int, sto *store.Store) (*WeeklyReport, error) {
 		TimeAboveRange: above / total,
 		WeeklyChange:   within/total - lwWithin/lwTotal,
 		Chart:          sendpart.File{Name: "weeklyOverlay.png", Reader: r},
+	}, nil
+}
+
+func addCarbohydrate(val, offset int, sto *store.Store) (*CarbohydrateResponse, error) {
+	when := time.Now().In(loc).Add(-time.Duration(offset) * time.Minute)
+	err := sto.AddPoint(store.FieldCarbohydrate, when, store.Carbohydrate{
+		Time:  when,
+		Value: val,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &CarbohydrateResponse{
+		Value: val,
+		Time:  when,
+	}, nil
+}
+
+func addInsulin(insulin string, units, offset int, sto *store.Store) (*InsulinResponse, error) {
+	when := time.Now().In(loc).Add(-time.Duration(offset) * time.Minute)
+	err := sto.AddPoint(store.FieldInsulin, when, store.Insulin{
+		Time:  when,
+		Type:  insulin,
+		Value: units,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &InsulinResponse{
+		Type:  insulin,
+		Time:  when,
+		Units: units,
 	}, nil
 }

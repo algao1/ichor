@@ -20,10 +20,7 @@ type Bot struct {
 }
 
 func Create(token string, uid float64, sto *store.Store, alertCh <-chan Alert) (*Bot, error) {
-	ses, err := session.New("Bot " + token)
-	if err != nil {
-		return nil, err
-	}
+	ses := session.New("Bot " + token)
 
 	// Verify that we can create a private channel.
 	duid := discord.UserID(uid)
