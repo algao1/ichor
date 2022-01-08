@@ -4,7 +4,7 @@ services:
   server:
     build:
       context: .
-      dockerfile: ./docker/py/Py.Dockerfile
+      dockerfile: ./docker/Py.Dockerfile
     container_name: server
     restart: always
     ports:
@@ -13,7 +13,7 @@ services:
   client:
     build:
       context: .
-      dockerfile: ./docker/go/Go.Dockerfile
+      dockerfile: ./docker/Go.Dockerfile
     container_name: client
     environment:
       - USER_ID=${USER_ID}

@@ -8,18 +8,20 @@ import (
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/gateway"
 	"github.com/diamondburned/arikawa/v3/session"
+	"go.uber.org/zap"
 )
 
 type Bot struct {
 	ses    *session.Session
 	sto    *store.Store
+	logger *zap.Logger
 	alerts <-chan Alert
 
 	uid  discord.UserID
 	chid discord.ChannelID
 }
 
-func Create(token string, uid float64, sto *store.Store, alertCh <-chan Alert) (*Bot, error) {
+func Create(token string, uid float64, sto *store.Store, logger *zap.Logger, alertCh <-chan Alert) (*Bot, error) {
 	ses := session.New("Bot " + token)
 
 	// Verify that we can create a private channel.
@@ -33,13 +35,20 @@ func Create(token string, uid float64, sto *store.Store, alertCh <-chan Alert) (
 		ses:    ses,
 		sto:    sto,
 		alerts: alertCh,
+		logger: logger,
 		uid:    duid,
 		chid:   uch.ID,
 	}
 
+	logger.Info("created Discord bot",
+		zap.String("token", token),
+		zap.Any("user id", duid),
+		zap.Any("private channel id", uch.ID),
+	)
+
 	// Add handlers.
 	ses.AddIntents(gateway.IntentDirectMessages)
-	ses.AddHandler(interactionCreate(b.ses, b.sto))
+	ses.AddHandler(interactionCreate(b.ses, b.sto, b.logger.Named("interactions")))
 
 	if alertCh != nil {
 		go b.handleAlerts()
@@ -68,6 +77,10 @@ func (b *Bot) Run(ctx context.Context) error {
 	// Delete old commands.
 	for _, command := range commands {
 		b.ses.DeleteCommand(appID, command.ID)
+		b.logger.Info("deleted command",
+			zap.Any("command id", command.ID),
+			zap.String("command name", command.Name),
+		)
 	}
 
 	// Add registered commands.
@@ -76,6 +89,9 @@ func (b *Bot) Run(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		b.logger.Info("successfully added command",
+			zap.String("command name", command.Name),
+		)
 	}
 
 	return nil

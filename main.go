@@ -78,9 +78,6 @@ func main() {
 		zap.Any("store config", storeConfig),
 	)
 
-	dc := dexcom.New(dexAccount, dexPassword, logger.Named("dexcom client"))
-	go RunUploader(dc, s, logger)
-
 	alertCh := make(chan discord.Alert)
 
 	puid, err := strconv.ParseFloat(uid, 64)
@@ -91,7 +88,7 @@ func main() {
 		)
 	}
 
-	db, err := discord.Create(token, puid, s, alertCh)
+	db, err := discord.Create(token, puid, s, logger.Named("discord"), alertCh)
 	if err != nil {
 		logger.Fatal("failed to create Discord bot",
 			zap.Error(err),
@@ -106,8 +103,11 @@ func main() {
 		)
 	}
 
-	p := predictor.New(conn)
-	go RunPredictor(p, s, alertCh)
+	dc := dexcom.New(dexAccount, dexPassword, logger.Named("dexcom client"))
+	go RunUploader(dc, s, logger)
+
+	p := predictor.New(conn, logger.Named("predictor"))
+	go RunPredictor(p, s, logger, alertCh)
 
 	db.Run(context.Background())
 	defer db.Stop()

@@ -2,7 +2,6 @@ package discord
 
 import (
 	"fmt"
-	"log"
 	"strconv"
 	"time"
 
@@ -13,6 +12,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/session"
 	"github.com/diamondburned/arikawa/v3/utils/json/option"
 	"github.com/diamondburned/arikawa/v3/utils/sendpart"
+	"go.uber.org/zap"
 	"gonum.org/v1/gonum/stat"
 )
 
@@ -22,12 +22,6 @@ const (
 	WarnLevel3 = 16763904 // #ffcc00
 	WarnLevel4 = 16750950 // #ff9966
 	WarnLevel5 = 13382400 // #cc3300
-)
-
-// Insulin types.
-const (
-	RapidActing = "rapid"
-	LongActing  = "long"
 )
 
 var defaultFooter = discord.EmbedFooter{
@@ -83,8 +77,8 @@ var registeredCommands = []api.CreateCommandData{
 				OptionName:  "type",
 				Description: "Type of insulin",
 				Choices: []discord.StringChoice{
-					{Name: RapidActing, Value: RapidActing},
-					{Name: LongActing, Value: LongActing},
+					{Name: store.RapidActing, Value: store.RapidActing},
+					{Name: store.LongActing, Value: store.LongActing},
 				},
 				Required: true,
 			},
@@ -176,12 +170,15 @@ func getAllOptions(opts []discord.CommandInteractionOption) map[string]string {
 	return optsMap
 }
 
-func interactionCreate(ses *session.Session, sto *store.Store) func(e *gateway.InteractionCreateEvent) {
+func interactionCreate(ses *session.Session, sto *store.Store, logger *zap.Logger) func(e *gateway.InteractionCreateEvent) {
 	return func(e *gateway.InteractionCreateEvent) {
 		var resp api.InteractionResponse
 
-		// This is slightly ugly.
 		// TODO: Really need to move each case to its own function.
+
+		logger.Info("got InteractionCreateEvent",
+			zap.Any("event", e),
+		)
 
 		switch data := e.Data.(type) {
 		case *discord.CommandInteraction:
@@ -189,6 +186,9 @@ func interactionCreate(ses *session.Session, sto *store.Store) func(e *gateway.I
 			case "glucose":
 				gr, err := glucoseReport(sto)
 				if err != nil {
+					logger.Info("failed to get glucose report",
+						zap.Error(err),
+					)
 					resp = interactionWarnResponse(err.Error())
 					break
 				}
@@ -231,6 +231,9 @@ func interactionCreate(ses *session.Session, sto *store.Store) func(e *gateway.I
 
 				wr, err := weeklyReport(int(n), sto)
 				if err != nil {
+					logger.Info("failed to get weekly report",
+						zap.Error(err),
+					)
 					resp = interactionWarnResponse(err.Error())
 					break
 				}
@@ -276,6 +279,9 @@ func interactionCreate(ses *session.Session, sto *store.Store) func(e *gateway.I
 
 				cr, err := addCarbohydrate(val, offset, sto)
 				if err != nil {
+					logger.Info("failed to add carbohydrate intake",
+						zap.Error(err),
+					)
 					resp = interactionWarnResponse(err.Error())
 					break
 				}
@@ -319,6 +325,9 @@ func interactionCreate(ses *session.Session, sto *store.Store) func(e *gateway.I
 
 				ir, err := addInsulin(insulin, units, offset, sto)
 				if err != nil {
+					logger.Info("failed to add insulin intake",
+						zap.Error(err),
+					)
 					resp = interactionWarnResponse(err.Error())
 					break
 				}
@@ -342,7 +351,9 @@ func interactionCreate(ses *session.Session, sto *store.Store) func(e *gateway.I
 		}
 
 		if err := ses.RespondInteraction(e.ID, e.Token, resp); err != nil {
-			log.Println("failed to send interaction callback: ", err)
+			logger.Info("failed to send interaction callback",
+				zap.Error(err),
+			)
 		}
 	}
 }
@@ -360,7 +371,7 @@ func glucoseReport(sto *store.Store) (*GlucoseReport, error) {
 
 	// Get future glucose predictions.
 	var preds []store.TimePoint
-	err = sto.GetPoints(end, end.Add(3*time.Hour), store.FieldGlucosePred, &preds)
+	err = sto.GetPoints(end, end.Add(6*time.Hour), store.FieldGlucosePred, &preds)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get predictions: %w", err)
 	}

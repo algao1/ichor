@@ -132,6 +132,20 @@ func (s *Store) AddPoint(field string, t time.Time, pt interface{}) error {
 	})
 }
 
+func (s *Store) DeletePoint(field string, t time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return s.DB.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(field))
+		if b == nil {
+			return fmt.Errorf("unable to find bucket: %s", field)
+		}
+
+		return b.Delete(timeToBytes(t))
+	})
+}
+
 // GetPoints retrieves a series of TimePoints for a given field,
 // between two dates. Returns an error if the field does not exist.
 func (s *Store) GetPoints(start, end time.Time, field string, ptsPtr interface{}) error {

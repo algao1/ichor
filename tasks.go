@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/algao1/ichor/discord"
@@ -16,6 +15,7 @@ import (
 const (
 	DefaultMinutes  = 1440
 	DefaultMaxCount = 288
+	DefaultLookBack = -4 * time.Hour
 )
 
 func RunUploader(client *dexcom.Client, s *store.Store, logger *zap.Logger) {
@@ -38,7 +38,7 @@ func RunUploader(client *dexcom.Client, s *store.Store, logger *zap.Logger) {
 				Trend: tr.Trend,
 			})
 			if err != nil {
-				logger.Info("failed to save glucose reading",
+				logger.Debug("failed to save glucose reading",
 					zap.Any("reading", tr),
 					zap.Error(err),
 				)
@@ -47,20 +47,53 @@ func RunUploader(client *dexcom.Client, s *store.Store, logger *zap.Logger) {
 	}
 }
 
-func RunPredictor(client *predictor.Client, s *store.Store, alertCh chan<- discord.Alert) {
+func RunPredictor(client *predictor.Client, s *store.Store, logger *zap.Logger, alertCh chan<- discord.Alert) {
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 
 	for ; true; <-ticker.C {
+		// Panic early, if no configuration could be found.
+		var conf store.Config
+		err := s.GetObject(store.IndexConfig, &conf)
+		if err != nil {
+			panic(fmt.Errorf("failed to load config: %w", err))
+		}
+
+		var expire time.Time
+		s.GetObject(store.IndexTimeoutExpire, &expire)
+
 		var pastPoints []store.TimePoint
-		if err := s.GetLastPoints(store.FieldGlucose, 24, &pastPoints); err != nil {
-			log.Printf("Failed to get past points: %s\n", err)
+		err = s.GetLastPoints(store.FieldGlucose, 4*12, &pastPoints)
+		if err != nil {
+			logger.Info("failed to get past points",
+				zap.Error(err),
+			)
 			continue
 		}
 
-		fpts, err := client.Predict(context.Background(), pastPoints)
+		var pastInsulin []store.Insulin
+		err = s.GetPoints(time.Now().Add(DefaultLookBack), time.Now(), store.FieldInsulin, &pastInsulin)
 		if err != nil {
-			log.Printf("Failed to make a prediction: %s\n", err)
+			logger.Info("failed to get past insulin values",
+				zap.Error(err),
+			)
+			continue
+		}
+
+		var pastCarbs []store.Carbohydrate
+		err = s.GetPoints(time.Now().Add(DefaultLookBack), time.Now(), store.FieldCarbohydrate, &pastCarbs)
+		if err != nil {
+			logger.Info("failed to get past carbohydrate values",
+				zap.Error(err),
+			)
+			continue
+		}
+
+		fpts, err := client.Predict(context.Background(), pastPoints, pastInsulin, pastCarbs)
+		if err != nil {
+			logger.Info("failed to make a prediction",
+				zap.Error(err),
+			)
 			continue
 		}
 
@@ -71,17 +104,6 @@ func RunPredictor(client *predictor.Client, s *store.Store, alertCh chan<- disco
 				Trend: fpt.Trend,
 			})
 		}
-
-		// Everything below here is very not production ready.
-		// TODO: Fix everything.
-
-		var conf store.Config
-		if err = s.GetObject(store.IndexConfig, &conf); err != nil {
-			panic(fmt.Errorf("failed to load config: %w", err))
-		}
-
-		var expire time.Time
-		s.GetObject(store.IndexTimeoutExpire, &expire)
 
 		if expire.After(time.Now()) {
 			continue

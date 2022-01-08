@@ -13,6 +13,12 @@ const (
 	IndexTimeoutExpire = "timeout-expire"
 )
 
+// Insulin types.
+const (
+	RapidActing = "rapid"
+	LongActing  = "long"
+)
+
 var Fields = []string{
 	FieldGlucose,
 	FieldGlucosePred,

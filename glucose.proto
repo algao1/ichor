@@ -10,8 +10,14 @@ service Glucose {
 }
 
 message Features {
+  repeated Feature features = 1;
+}
+
+message Feature {
   google.protobuf.Timestamp time = 1;
-  repeated double values = 2;
+  double glucose = 2;
+  double insulin = 3;
+  double carbs = 4;
 }
 
 message Label {
